@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -239,4 +240,199 @@ func (s *Server) handleSearchMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondWithJSON(w, http.StatusOK, searchMetadataResponse{Results: results})
+}
+
+// linkMetadataRequest is the JSON body for POST /api/folders/{folderID}/metadata/link.
+type linkMetadataRequest struct {
+	ProviderName string `json:"provider_name"`
+	ProviderID   string `json:"provider_id"`
+}
+
+// knownProviders is the set of valid provider names.
+var knownProviders = map[string]bool{
+	"anilist": true,
+}
+
+// fetchAndStoreMetadata fetches metadata (and optionally cover) from the provider,
+// upserts the metadata into the store, and returns the updated metadata response.
+// It is shared by handleLinkMetadata and handleRefreshMetadata.
+func (s *Server) fetchAndStoreMetadata(w http.ResponseWriter, r *http.Request, folderID int64, providerID string) {
+	ctx := r.Context()
+
+	meta, err := s.metadataProvider.GetSeriesMetadata(ctx, providerID)
+	if err != nil {
+		log.Printf("GetSeriesMetadata(provider=%q, id=%q): %v", s.metadataProvider.Name(), providerID, err)
+		RespondWithError(w, http.StatusBadGateway, "failed to fetch metadata from provider: "+err.Error())
+		return
+	}
+
+	coverURL, err := s.metadataProvider.GetSeriesCover(ctx, providerID)
+	if err != nil {
+		log.Printf("GetSeriesCover(provider=%q, id=%q): %v", s.metadataProvider.Name(), providerID, err)
+		RespondWithError(w, http.StatusBadGateway, "failed to fetch cover from provider: "+err.Error())
+		return
+	}
+	if coverURL != "" {
+		meta.ThumbnailURL = &coverURL
+	}
+
+	if err := s.store.UpsertSeriesMetadata(folderID, meta); err != nil {
+		log.Printf("UpsertSeriesMetadata(%d): %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to store metadata")
+		return
+	}
+
+	row, err := s.store.GetSeriesMetadata(folderID)
+	if err != nil {
+		log.Printf("GetSeriesMetadata(%d) after upsert: %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
+		return
+	}
+
+	resp := getMetadataResponse{
+		Metadata: buildMetadataFieldsResponse(row),
+	}
+
+	link, err := s.store.GetProviderLink(folderID)
+	if err != nil {
+		if !errors.Is(err, store.ErrProviderLinkNotFound) {
+			log.Printf("GetProviderLink(%d): %v", folderID, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to load provider link")
+			return
+		}
+	} else {
+		resp.Provider = &providerResponse{
+			Name: link.ProviderName,
+			ID:   link.ProviderID,
+		}
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// handleLinkMetadata links a folder to a metadata provider and fetches metadata.
+func (s *Server) handleLinkMetadata(w http.ResponseWriter, r *http.Request) {
+	folderID, err := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	if err != nil || folderID <= 0 {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folder ID")
+		return
+	}
+
+	var req linkMetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if !knownProviders[req.ProviderName] {
+		RespondWithError(w, http.StatusBadRequest, "unknown provider_name: "+req.ProviderName)
+		return
+	}
+	if req.ProviderID == "" {
+		RespondWithError(w, http.StatusBadRequest, "provider_id must not be empty")
+		return
+	}
+
+	if s.metadataProvider == nil {
+		RespondWithError(w, http.StatusInternalServerError, "No metadata provider configured")
+		return
+	}
+
+	if err := s.store.UpsertProviderLink(folderID, req.ProviderName, req.ProviderID); err != nil {
+		log.Printf("UpsertProviderLink(%d, %q, %q): %v", folderID, req.ProviderName, req.ProviderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to store provider link")
+		return
+	}
+
+	s.fetchAndStoreMetadata(w, r, folderID, req.ProviderID)
+}
+
+// handleRefreshMetadata re-fetches metadata from the linked provider.
+func (s *Server) handleRefreshMetadata(w http.ResponseWriter, r *http.Request) {
+	folderID, err := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	if err != nil || folderID <= 0 {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folder ID")
+		return
+	}
+
+	link, err := s.store.GetProviderLink(folderID)
+	if err != nil {
+		if errors.Is(err, store.ErrProviderLinkNotFound) {
+			RespondWithError(w, http.StatusNotFound, "no provider link found for this folder")
+			return
+		}
+		log.Printf("GetProviderLink(%d): %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to load provider link")
+		return
+	}
+
+	if s.metadataProvider == nil {
+		RespondWithError(w, http.StatusInternalServerError, "No metadata provider configured")
+		return
+	}
+
+	s.fetchAndStoreMetadata(w, r, folderID, link.ProviderID)
+}
+
+// handleResetMetadata clears all metadata fields but preserves the provider link.
+func (s *Server) handleResetMetadata(w http.ResponseWriter, r *http.Request) {
+	folderID, err := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	if err != nil || folderID <= 0 {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folder ID")
+		return
+	}
+
+	// Check existence first — ResetSeriesMetadata silently succeeds when no row exists.
+	_, err = s.store.GetSeriesMetadata(folderID)
+	if err != nil {
+		if errors.Is(err, store.ErrMetadataNotFound) {
+			RespondWithError(w, http.StatusNotFound, "no metadata found for this folder")
+			return
+		}
+		log.Printf("GetSeriesMetadata(%d): %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
+		return
+	}
+
+	if err := s.store.ResetSeriesMetadata(folderID); err != nil {
+		log.Printf("ResetSeriesMetadata(%d): %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to reset metadata")
+		return
+	}
+
+	RespondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"status":                  "reset",
+		"provider_link_preserved": true,
+	})
+}
+
+// handleUnlinkMetadata clears all metadata and removes the provider link.
+func (s *Server) handleUnlinkMetadata(w http.ResponseWriter, r *http.Request) {
+	folderID, err := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	if err != nil || folderID <= 0 {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folder ID")
+		return
+	}
+
+	// Check existence first — UnlinkSeriesMetadata silently succeeds when no row exists.
+	_, err = s.store.GetSeriesMetadata(folderID)
+	if err != nil {
+		if errors.Is(err, store.ErrMetadataNotFound) {
+			RespondWithError(w, http.StatusNotFound, "no metadata found for this folder")
+			return
+		}
+		log.Printf("GetSeriesMetadata(%d): %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
+		return
+	}
+
+	if err := s.store.UnlinkSeriesMetadata(folderID); err != nil {
+		log.Printf("UnlinkSeriesMetadata(%d): %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to unlink metadata")
+		return
+	}
+
+	RespondWithJSON(w, http.StatusOK, map[string]string{
+		"status": "unlinked",
+	})
 }

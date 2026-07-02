@@ -115,6 +115,10 @@ func (s *Server) Router() http.Handler {
 			r.Get("/folders/{folderID}/anilist", s.handleGetFolderAnilist)
 			r.Post("/folders/{folderID}/anilist", s.handlePostFolderAnilist)
 			r.Get("/folders/{folderID}/metadata", s.handleGetMetadata)
+			r.Post("/folders/{folderID}/metadata/link", s.handleLinkMetadata)
+			r.Post("/folders/{folderID}/metadata/refresh", s.handleRefreshMetadata)
+			r.Post("/folders/{folderID}/metadata/reset", s.handleResetMetadata)
+			r.Post("/folders/{folderID}/metadata/unlink", s.handleUnlinkMetadata)
 			r.Get("/folders/{folderID}/chapters/{chapterID}/neighbors", s.handleGetChapterNeighbors)
 
 			// Metadata Search

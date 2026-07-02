@@ -3,13 +3,16 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vrsandeep/mango-go/internal/api"
 	"github.com/vrsandeep/mango-go/internal/metadata"
+	"github.com/vrsandeep/mango-go/internal/store"
 	"github.com/vrsandeep/mango-go/internal/testutil"
 )
 
@@ -19,16 +22,27 @@ type mockMetadataProvider struct {
 	searchErr     error
 	lastQuery     string
 	lastLimit     int
+
+	seriesMeta    *metadata.SeriesMetadata
+	seriesMetaErr error
+	coverURL      string
+	coverErr      error
 }
 
 func (m *mockMetadataProvider) Name() string { return "mock" }
 
 func (m *mockMetadataProvider) GetSeriesMetadata(_ context.Context, _ string) (*metadata.SeriesMetadata, error) {
-	return nil, metadata.ErrNotSupported
+	if m.seriesMetaErr != nil {
+		return nil, m.seriesMetaErr
+	}
+	return m.seriesMeta, nil
 }
 
 func (m *mockMetadataProvider) GetSeriesCover(_ context.Context, _ string) (string, error) {
-	return "", metadata.ErrNotSupported
+	if m.coverErr != nil {
+		return "", m.coverErr
+	}
+	return m.coverURL, nil
 }
 
 func (m *mockMetadataProvider) GetBookMetadata(_ context.Context, _, _ string) (*metadata.BookMetadata, error) {
@@ -537,5 +551,415 @@ func TestHandleSearchMetadata_Unauthorized(t *testing.T) {
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 without auth, got %d", rr.Code)
+	}
+}
+
+func newTestMeta() *metadata.SeriesMetadata {
+	status := metadata.SeriesStatusOngoing
+	title := "Provider Title"
+	summary := "Provider summary"
+	score := 7.5
+	return &metadata.SeriesMetadata{
+		Status:         &status,
+		Title:          &title,
+		Summary:        &summary,
+		CommunityScore: &score,
+		Genres:         []string{"Action"},
+		Tags:           []string{"Shounen"},
+		Authors:        []metadata.Author{{Name: "Author A", Role: metadata.AuthorRoleWriter}},
+		Links:          []metadata.WebLink{{Label: "AniList", URL: "https://anilist.co/manga/20"}},
+		Titles:         []metadata.SeriesTitle{{Title: "テスト", Type: "NATIVE", Language: "ja"}},
+	}
+}
+
+func TestHandleLinkMetadata_Success(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/LinkTest", "LinkTest", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMeta: newTestMeta(),
+		coverURL:   "https://img.example/cover.jpg",
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"20"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			Title        *string `json:"title"`
+			ThumbnailURL *string `json:"thumbnail_url"`
+		} `json:"metadata"`
+		Provider *struct {
+			Name string `json:"name"`
+			ID   string `json:"id"`
+		} `json:"provider"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.Title == nil || *resp.Metadata.Title != "Provider Title" {
+		t.Errorf("title: got %v", resp.Metadata.Title)
+	}
+	if resp.Metadata.ThumbnailURL == nil || *resp.Metadata.ThumbnailURL != "https://img.example/cover.jpg" {
+		t.Errorf("thumbnail_url: got %v", resp.Metadata.ThumbnailURL)
+	}
+	if resp.Provider == nil || resp.Provider.Name != "anilist" || resp.Provider.ID != "20" {
+		t.Errorf("provider: got %+v", resp.Provider)
+	}
+}
+
+func TestHandleLinkMetadata_InvalidProviderName_Returns400(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/LinkBadProv", "LinkBadProv", nil)
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	body := `{"provider_name":"unknown","provider_id":"20"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleLinkMetadata_EmptyProviderID_Returns400(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/LinkEmptyID", "LinkEmptyID", nil)
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	body := `{"provider_name":"anilist","provider_id":""}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleLinkMetadata_ProviderFetchError_Returns502(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/LinkFetchErr", "LinkFetchErr", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMetaErr: fmt.Errorf("network timeout"),
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"20"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleLinkMetadata_CoverFailureIgnoreMode(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/LinkCoverIgnore", "LinkCoverIgnore", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMeta: newTestMeta(),
+		coverURL:   "",
+		coverErr:   nil,
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"20"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 (cover ignored), got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			ThumbnailURL *string `json:"thumbnail_url"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.ThumbnailURL != nil {
+		t.Errorf("thumbnail_url should be null when cover ignored, got %v", *resp.Metadata.ThumbnailURL)
+	}
+}
+
+func TestHandleLinkMetadata_CoverFailureFailMode_Returns502(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/LinkCoverFail", "LinkCoverFail", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMeta: newTestMeta(),
+		coverErr:   fmt.Errorf("cover fetch failed"),
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"20"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Errorf("expected 502 (cover fail mode), got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleRefreshMetadata_Success(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/RefreshTest", "RefreshTest", nil)
+
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "20"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+	oldTitle := "Old Title"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &oldTitle}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+
+	mock := &mockMetadataProvider{
+		seriesMeta: newTestMeta(),
+		coverURL:   "https://img.example/refreshed.jpg",
+	}
+	server.SetMetadataProvider(mock)
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/refresh", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			Title        *string `json:"title"`
+			ThumbnailURL *string `json:"thumbnail_url"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.Title == nil || *resp.Metadata.Title != "Provider Title" {
+		t.Errorf("title should be updated to provider value, got %v", resp.Metadata.Title)
+	}
+	if resp.Metadata.ThumbnailURL == nil || *resp.Metadata.ThumbnailURL != "https://img.example/refreshed.jpg" {
+		t.Errorf("thumbnail_url: got %v", resp.Metadata.ThumbnailURL)
+	}
+}
+
+func TestHandleRefreshMetadata_NoProviderLink_Returns404(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/RefreshNoLink", "RefreshNoLink", nil)
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/refresh", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if errResp["error"] != "no provider link found for this folder" {
+		t.Errorf("error message: got %q", errResp["error"])
+	}
+}
+
+func TestHandleResetMetadata_Success(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/ResetTest", "ResetTest", nil)
+
+	title := "Reset Me"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title, Genres: []string{"Action"}}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "20"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/reset", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp["status"] != "reset" {
+		t.Errorf("status: got %v", resp["status"])
+	}
+	if resp["provider_link_preserved"] != true {
+		t.Errorf("provider_link_preserved: got %v", resp["provider_link_preserved"])
+	}
+}
+
+func TestHandleResetMetadata_NoMetadata_Returns404(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/ResetNoMeta", "ResetNoMeta", nil)
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/reset", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if errResp["error"] != "no metadata found for this folder" {
+		t.Errorf("error message: got %q", errResp["error"])
+	}
+}
+
+func TestHandleResetMetadata_PreservesProviderLink(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/ResetKeepLink", "ResetKeepLink", nil)
+
+	title := "Will Be Reset"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "42"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/reset", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	link, err := server.Store().GetProviderLink(folder.ID)
+	if err != nil {
+		t.Fatalf("GetProviderLink after reset should succeed: %v", err)
+	}
+	if link.ProviderName != "anilist" || link.ProviderID != "42" {
+		t.Errorf("provider link should be preserved, got name=%q id=%q", link.ProviderName, link.ProviderID)
+	}
+}
+
+func TestHandleUnlinkMetadata_Success(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/UnlinkTest", "UnlinkTest", nil)
+
+	title := "Unlink Me"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "20"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/unlink", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp["status"] != "unlinked" {
+		t.Errorf("status: got %q", resp["status"])
+	}
+}
+
+func TestHandleUnlinkMetadata_NoMetadata_Returns404(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/UnlinkNoMeta", "UnlinkNoMeta", nil)
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/unlink", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if errResp["error"] != "no metadata found for this folder" {
+		t.Errorf("error message: got %q", errResp["error"])
+	}
+}
+
+func TestHandleUnlinkMetadata_RemovesProviderLink(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/UnlinkRemLink", "UnlinkRemLink", nil)
+
+	title := "Will Be Unlinked"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "99"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/unlink", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	_, err := server.Store().GetProviderLink(folder.ID)
+	if err == nil {
+		t.Fatal("GetProviderLink after unlink should return error")
+	}
+	if !errors.Is(err, store.ErrProviderLinkNotFound) {
+		t.Errorf("expected ErrProviderLinkNotFound, got %v", err)
 	}
 }
