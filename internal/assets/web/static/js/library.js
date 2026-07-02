@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const ratingClearBtn = document.getElementById('rating-clear-btn');
   const progressActions = document.getElementById('progress-actions');
   const folderTagsSection = document.getElementById('folder-tags-section');
+  const metadataPanel = document.getElementById('metadata-panel');
+  const noMetadataPrompt = document.getElementById('no-metadata-prompt');
 
   // --- State Management ---
   let state = {
@@ -120,6 +122,253 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     button.appendChild(icon);
     headerActions.appendChild(button);
+  };
+
+  const escapeHtml = str => {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  };
+
+  const formatReadingDirection = val => {
+    const map = {
+      LEFT_TO_RIGHT: 'Left to Right',
+      RIGHT_TO_LEFT: 'Right to Left',
+      VERTICAL: 'Vertical',
+      WEBTOON: 'Webtoon',
+    };
+    return map[val] || val;
+  };
+
+  const formatAuthorRole = role => {
+    return role
+      .split('_')
+      .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const formatReleaseDate = (year, month, day) => {
+    if (!year) return null;
+    let date = String(year);
+    if (month) {
+      date += '-' + String(month).padStart(2, '0');
+      if (day) {
+        date += '-' + String(day).padStart(2, '0');
+      }
+    }
+    return date;
+  };
+
+  const lockIcon = locked => {
+    return locked ? ' <i class="ph-bold ph-lock md-lock" title="Locked"></i>' : '';
+  };
+
+  const fetchAndRenderMetadataPanel = async folderId => {
+    if (!folderId || !metadataPanel || !noMetadataPrompt) return;
+
+    try {
+      const res = await fetch(`/api/folders/${folderId}/metadata`);
+
+      if (res.status === 404) {
+        metadataPanel.style.display = 'none';
+        noMetadataPrompt.style.display = 'block';
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const md = data.metadata;
+      const locks = md.locks || {};
+      const provider = data.provider;
+
+      noMetadataPrompt.style.display = 'none';
+
+      let html = '';
+
+      const hasTitle = md.title && md.title.trim();
+      const hasStatus = md.status;
+
+      if (hasTitle || hasStatus) {
+        html += '<div class="md-header">';
+        if (hasTitle) {
+          html += `<h2 class="md-title">${escapeHtml(md.title)}${lockIcon(locks.title)}</h2>`;
+        }
+        if (hasStatus) {
+          const statusClass = md.status.toLowerCase();
+          html += `<span class="md-status-badge ${statusClass}">${escapeHtml(md.status)}${lockIcon(locks.status)}</span>`;
+        }
+        html += '</div>';
+      }
+
+      if (provider) {
+        const providerLabel = provider.name.charAt(0).toUpperCase() + provider.name.slice(1);
+        html += `<div style="margin-bottom: 0.75rem;">`;
+        html += `<span class="md-provider-link"><i class="ph-bold ph-link"></i> Linked to ${escapeHtml(providerLabel)}</span>`;
+        html += `</div>`;
+      }
+
+      if (md.titles && md.titles.length > 0) {
+        html += '<div class="md-alt-titles">';
+        html += `<button class="md-alt-titles-toggle" data-expanded="false">`;
+        html += `<i class="ph-bold ph-caret-right"></i> ${md.titles.length} Alternative Title${md.titles.length > 1 ? 's' : ''}${lockIcon(locks.titles)}`;
+        html += `</button>`;
+        html += '<ul class="md-alt-titles-list">';
+        md.titles.forEach(t => {
+          const lang = t.language
+            ? ` <span class="md-title-lang">(${escapeHtml(t.language)})</span>`
+            : '';
+          html += `<li>${escapeHtml(t.title)}${lang}</li>`;
+        });
+        html += '</ul></div>';
+      }
+
+      if (md.summary && md.summary.trim()) {
+        html += '<div class="md-summary">';
+        html += `<div class="md-section-label">Summary${lockIcon(locks.summary)}</div>`;
+        html += `<p class="md-summary-text collapsed">${escapeHtml(md.summary)}</p>`;
+        html += `<button class="md-summary-toggle" data-expanded="false">Show more</button>`;
+        html += '</div>';
+      }
+
+      const infoItems = [];
+      if (md.publisher) {
+        infoItems.push({ label: 'Publisher', value: md.publisher, lock: locks.publisher });
+      }
+      if (md.reading_direction) {
+        infoItems.push({
+          label: 'Direction',
+          value: formatReadingDirection(md.reading_direction),
+          lock: locks.reading_direction,
+        });
+      }
+      if (md.age_rating !== null && md.age_rating !== undefined) {
+        infoItems.push({ label: 'Age Rating', value: md.age_rating + '+', lock: locks.age_rating });
+      }
+      if (md.language) {
+        infoItems.push({ label: 'Language', value: md.language, lock: locks.language });
+      }
+      if (md.total_book_count !== null && md.total_book_count !== undefined) {
+        infoItems.push({
+          label: 'Volumes',
+          value: String(md.total_book_count),
+          lock: locks.total_book_count,
+        });
+      }
+      const releaseDate = formatReleaseDate(md.release_year, md.release_month, md.release_day);
+      if (releaseDate) {
+        infoItems.push({ label: 'Released', value: releaseDate, lock: locks.release_date });
+      }
+
+      if (infoItems.length > 0) {
+        html += '<div class="md-info-grid">';
+        infoItems.forEach(item => {
+          html += `<div class="md-info-item">`;
+          html += `<span class="md-info-label">${item.label}</span>`;
+          html += `<span class="md-info-value">${escapeHtml(item.value)}</span>`;
+          html += lockIcon(item.lock);
+          html += `</div>`;
+        });
+        html += '</div>';
+      }
+
+      if (md.community_score !== null && md.community_score !== undefined) {
+        const pct = (md.community_score / 10) * 100;
+        html += '<div class="md-score">';
+        html += `<span class="md-section-label">Community Score${lockIcon(locks.community_score)}</span>`;
+        html += `<span class="md-score-value">${md.community_score.toFixed(1)}/10</span>`;
+        html += `<div class="md-score-bar"><div class="md-score-fill" style="width: ${pct}%;"></div></div>`;
+        html += '</div>';
+      }
+
+      if (md.genres && md.genres.length > 0) {
+        html += `<div class="md-section-label">Genres${lockIcon(locks.genres)}</div>`;
+        html += '<div class="md-pills">';
+        md.genres.forEach(g => {
+          html += `<span class="md-genre-pill">${escapeHtml(g)}</span>`;
+        });
+        html += '</div>';
+      }
+
+      if (md.tags && md.tags.length > 0) {
+        html += `<div class="md-section-label">Tags${lockIcon(locks.tags)}</div>`;
+        html += '<div class="md-pills">';
+        md.tags.forEach(t => {
+          html += `<span class="md-tag-pill">${escapeHtml(t)}</span>`;
+        });
+        html += '</div>';
+      }
+
+      if (md.authors && md.authors.length > 0) {
+        html += `<div class="md-section-label">Authors${lockIcon(locks.authors)}</div>`;
+        html += '<div class="md-authors">';
+        const groups = {};
+        md.authors.forEach(a => {
+          const role = a.role || 'Other';
+          if (!groups[role]) groups[role] = [];
+          groups[role].push(a.name);
+        });
+        Object.entries(groups).forEach(([role, names]) => {
+          html += '<div class="md-author-group">';
+          html += `<div class="md-author-role">${escapeHtml(formatAuthorRole(role))}</div>`;
+          names.forEach(name => {
+            html += `<div class="md-author-name">${escapeHtml(name)}</div>`;
+          });
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      if (md.links && md.links.length > 0) {
+        html += `<div class="md-section-label">Links${lockIcon(locks.links)}</div>`;
+        html += '<div class="md-links">';
+        md.links.forEach(link => {
+          html += `<a class="md-ext-link" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">`;
+          html += `<i class="ph-bold ph-arrow-square-out"></i> ${escapeHtml(link.label)}`;
+          html += '</a>';
+        });
+        html += '</div>';
+      }
+
+      metadataPanel.innerHTML = html;
+      metadataPanel.style.display = 'block';
+
+      const altTitlesToggle = metadataPanel.querySelector('.md-alt-titles-toggle');
+      if (altTitlesToggle) {
+        altTitlesToggle.addEventListener('click', () => {
+          const list = metadataPanel.querySelector('.md-alt-titles-list');
+          const expanded = altTitlesToggle.dataset.expanded === 'true';
+          altTitlesToggle.dataset.expanded = String(!expanded);
+          list.classList.toggle('expanded', !expanded);
+          const icon = altTitlesToggle.querySelector('i');
+          icon.className = !expanded ? 'ph-bold ph-caret-down' : 'ph-bold ph-caret-right';
+        });
+      }
+
+      const summaryToggle = metadataPanel.querySelector('.md-summary-toggle');
+      if (summaryToggle) {
+        const summaryText = metadataPanel.querySelector('.md-summary-text');
+        setTimeout(() => {
+          if (summaryText.scrollHeight <= summaryText.clientHeight) {
+            summaryToggle.style.display = 'none';
+          }
+        }, 0);
+        summaryToggle.addEventListener('click', () => {
+          const expanded = summaryToggle.dataset.expanded === 'true';
+          summaryToggle.dataset.expanded = String(!expanded);
+          summaryText.classList.toggle('collapsed', expanded);
+          summaryToggle.textContent = expanded ? 'Show more' : 'Show less';
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching metadata:', error);
+      toast.error('Failed to load metadata');
+    }
   };
 
   // Get the current folder ID from the URL path.
@@ -438,6 +687,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderRating(data.current_folder.rating ?? null);
       } else {
         ratingWidget.style.display = 'none';
+      }
+
+      if (inFolder) {
+        fetchAndRenderMetadataPanel(state.currentFolderId);
+      } else {
+        metadataPanel.style.display = 'none';
+        metadataPanel.innerHTML = '';
+        noMetadataPrompt.style.display = 'none';
       }
 
       // Tag filter chips at root level

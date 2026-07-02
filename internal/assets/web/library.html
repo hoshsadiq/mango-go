@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/static/css/ext/phosphor-icons.css">
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/library.css">
+    <link rel="stylesheet" href="/static/css/metadata-panel.css">
 </head>
 
 <body>
@@ -71,6 +72,14 @@
                 <input type="text" id="tag-input" class="inline-tag-input" placeholder="+ Add tag…" autocomplete="off" title="Type a tag name and press Enter to save">
                 <div class="autocomplete-suggestions" id="autocomplete-suggestions"></div>
             </div>
+        </div>
+
+        <div class="metadata-panel" id="metadata-panel" style="display: none;"></div>
+        <div class="no-metadata-prompt" id="no-metadata-prompt" style="display: none;">
+            <p>No metadata linked. Search for metadata to get started.</p>
+            <button class="link-metadata-btn" id="link-metadata-btn">
+                <i class="ph-bold ph-magnifying-glass"></i> Search Metadata
+            </button>
         </div>
 
         <span id="total-count" class="total-count"></span>
