@@ -1,0 +1,159 @@
+package metadata
+
+import (
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"golang.org/x/time/rate"
+)
+
+// RetryClient wraps an HTTP client with retry logic, exponential backoff, and rate limiting.
+type RetryClient struct {
+	Client         *http.Client
+	MaxRetries     int
+	InitialBackoff time.Duration
+	RateLimiter    *rate.Limiter
+}
+
+// Option is a functional option for configuring RetryClient.
+type Option func(*RetryClient)
+
+// WithMaxRetries sets the maximum number of retries.
+func WithMaxRetries(maxRetries int) Option {
+	return func(rc *RetryClient) {
+		rc.MaxRetries = maxRetries
+	}
+}
+
+// WithInitialBackoff sets the initial backoff duration.
+func WithInitialBackoff(backoff time.Duration) Option {
+	return func(rc *RetryClient) {
+		rc.InitialBackoff = backoff
+	}
+}
+
+// WithRateLimiter sets the rate limiter.
+func WithRateLimiter(limiter *rate.Limiter) Option {
+	return func(rc *RetryClient) {
+		rc.RateLimiter = limiter
+	}
+}
+
+// WithHTTPClient sets the underlying HTTP client.
+func WithHTTPClient(client *http.Client) Option {
+	return func(rc *RetryClient) {
+		rc.Client = client
+	}
+}
+
+// NewRetryClient creates a new RetryClient with the given options.
+func NewRetryClient(opts ...Option) *RetryClient {
+	rc := &RetryClient{
+		Client:         &http.Client{},
+		MaxRetries:     3,
+		InitialBackoff: 2 * time.Second,
+		RateLimiter:    nil,
+	}
+
+	for _, opt := range opts {
+		opt(rc)
+	}
+
+	return rc
+}
+
+// NewAniListClient creates a RetryClient configured for AniList API.
+// It has MaxRetries=3, InitialBackoff=2s, and a rate limiter of 15 requests per 10 seconds.
+func NewAniListClient() *RetryClient {
+	// 15 requests per 10 seconds = 1 request per 667ms
+	limiter := rate.NewLimiter(rate.Every(667*time.Millisecond), 15)
+
+	return NewRetryClient(
+		WithMaxRetries(3),
+		WithInitialBackoff(2*time.Second),
+		WithRateLimiter(limiter),
+	)
+}
+
+// Do executes an HTTP request with retry logic, exponential backoff, and rate limiting.
+// It retries on HTTP 429 (Too Many Requests) and 5xx errors.
+// It respects the Retry-After header if present.
+// It does not retry on timeout errors.
+func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
+	ctx := req.Context()
+	backoff := rc.InitialBackoff
+
+	for attempt := 0; attempt <= rc.MaxRetries; attempt++ {
+		// Apply rate limiting if configured
+		if rc.RateLimiter != nil {
+			if err := rc.RateLimiter.Wait(ctx); err != nil {
+				return nil, fmt.Errorf("rate limiter error: %w", err)
+			}
+		}
+
+		// Execute the request
+		resp, err := rc.Client.Do(req)
+
+		// Check for context deadline exceeded (timeout) - don't retry
+		if err != nil && ctx.Err() != nil {
+			return nil, err
+		}
+
+		// If no error and status is not retryable, return the response
+		if err == nil && !isRetryableStatus(resp.StatusCode) {
+			return resp, nil
+		}
+
+		// If there's an error that's not a retryable status, return it immediately
+		if err != nil {
+			return resp, err
+		}
+
+		// If this is the last attempt, return the response
+		if attempt == rc.MaxRetries {
+			return resp, nil
+		}
+
+		// Determine backoff duration
+		waitDuration := backoff
+
+		// Check for Retry-After header
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
+				if seconds, err := strconv.Atoi(retryAfter); err == nil {
+					waitDuration = time.Duration(seconds) * time.Second
+				}
+			}
+		}
+
+		// Check if we would exceed the 30s total timeout
+		deadline, ok := ctx.Deadline()
+		if ok {
+			timeRemaining := time.Until(deadline)
+			if timeRemaining <= waitDuration {
+				// Not enough time for another retry, return current response
+				return resp, nil
+			}
+		}
+
+		// Wait before retrying
+		select {
+		case <-time.After(waitDuration):
+			// Continue to next attempt
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+
+		// Double the backoff for next iteration
+		backoff *= 2
+	}
+
+	return nil, fmt.Errorf("unexpected: exhausted retries without returning")
+}
+
+// isRetryableStatus returns true if the HTTP status code should trigger a retry.
+func isRetryableStatus(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
+}
