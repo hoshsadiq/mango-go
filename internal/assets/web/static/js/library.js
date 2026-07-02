@@ -37,6 +37,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const folderTagsSection = document.getElementById('folder-tags-section');
   const metadataPanel = document.getElementById('metadata-panel');
   const noMetadataPrompt = document.getElementById('no-metadata-prompt');
+  const metadataSearchModal = document.getElementById('metadata-search-modal');
+  const mdSearchInput = document.getElementById('md-search-input');
+  const mdSearchBtn = document.getElementById('md-search-btn');
+  const mdSearchCloseBtn = document.getElementById('md-search-close-btn');
+  const mdSearchCancelBtn = document.getElementById('md-search-cancel-btn');
+  const mdSearchResults = document.getElementById('md-search-results');
+  const mdSearchLoading = document.getElementById('md-search-loading');
+  const mdSearchError = document.getElementById('md-search-error');
+  const mdLinkBtn = document.getElementById('md-link-btn');
+  const linkMetadataBtn = document.getElementById('link-metadata-btn');
 
   // --- State Management ---
   let state = {
@@ -55,10 +65,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
   let allTags = [];
   let currentFolderTags = [];
-  // Separate expand states so collapsing one doesn't affect the other
   let tagsExpanded = false;
   let filterChipsExpanded = false;
-  // Show first N items before adding a "+X more" toggle
+  let mdSelectedResult = null;
   const TAGS_COLLAPSED_LIMIT = 8;
   const FILTER_CHIPS_LIMIT = 10;
 
@@ -208,9 +217,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (provider) {
         const providerLabel = provider.name.charAt(0).toUpperCase() + provider.name.slice(1);
-        html += `<div style="margin-bottom: 0.75rem;">`;
+        html += '<div class="md-actions">';
         html += `<span class="md-provider-link"><i class="ph-bold ph-link"></i> Linked to ${escapeHtml(providerLabel)}</span>`;
-        html += `</div>`;
+        html += `<button class="md-action-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>`;
+        html += `<button class="md-action-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i> Re-link</button>`;
+        html += '<span class="md-actions-spacer"></span>';
+        html += `<button class="md-action-btn md-danger-btn" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i> Reset</button>`;
+        html += `<button class="md-action-btn md-danger-btn" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i> Unlink</button>`;
+        html += '</div>';
       }
 
       if (md.titles && md.titles.length > 0) {
@@ -335,6 +349,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         html += '</div>';
       }
 
+      if (!html.trim() && !provider) {
+        metadataPanel.style.display = 'none';
+        metadataPanel.innerHTML = '';
+        noMetadataPrompt.style.display = 'block';
+        return;
+      }
+
       metadataPanel.innerHTML = html;
       metadataPanel.style.display = 'block';
 
@@ -365,9 +386,197 @@ document.addEventListener('DOMContentLoaded', async () => {
           summaryToggle.textContent = expanded ? 'Show more' : 'Show less';
         });
       }
+
+      const refreshBtn = metadataPanel.querySelector('#md-refresh-btn');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => handleMetadataRefresh(folderId));
+      }
+      const relinkBtn = metadataPanel.querySelector('#md-relink-btn');
+      if (relinkBtn) {
+        relinkBtn.addEventListener('click', openMetadataSearchModal);
+      }
+      const resetBtn = metadataPanel.querySelector('#md-reset-btn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => handleMetadataReset(folderId));
+      }
+      const unlinkBtn = metadataPanel.querySelector('#md-unlink-btn');
+      if (unlinkBtn) {
+        unlinkBtn.addEventListener('click', () => handleMetadataUnlink(folderId));
+      }
     } catch (error) {
       console.error('Error fetching metadata:', error);
       toast.error('Failed to load metadata');
+    }
+  };
+
+  const openMetadataSearchModal = () => {
+    mdSelectedResult = null;
+    mdLinkBtn.disabled = true;
+    mdSearchResults.innerHTML = '';
+    mdSearchError.style.display = 'none';
+    mdSearchLoading.style.display = 'none';
+    mdSearchInput.value = pageTitleEl.textContent || '';
+    metadataSearchModal.style.display = 'flex';
+    mdSearchInput.focus();
+    mdSearchInput.select();
+  };
+
+  const closeMetadataSearchModal = () => {
+    metadataSearchModal.style.display = 'none';
+    mdSelectedResult = null;
+  };
+
+  const performMetadataSearch = async () => {
+    const query = mdSearchInput.value.trim();
+    if (!query) return;
+
+    mdSearchError.style.display = 'none';
+    mdSearchResults.innerHTML = '';
+    mdSearchLoading.style.display = 'flex';
+    mdSelectedResult = null;
+    mdLinkBtn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/metadata/search?q=${encodeURIComponent(query)}&limit=10`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Search failed (HTTP ${res.status})`);
+      }
+      const data = await res.json();
+      const results = data.results || [];
+
+      mdSearchLoading.style.display = 'none';
+
+      if (results.length === 0) {
+        mdSearchResults.innerHTML =
+          '<div class="md-search-empty">No results found. Try a different search query.</div>';
+        return;
+      }
+
+      mdSearchResults.innerHTML = results
+        .map(
+          (r, i) => `<div class="md-result-card" data-index="${i}">
+          <img class="md-result-thumb" src="${escapeHtml(r.image_url || '')}" alt="" onerror="this.style.display='none'">
+          <div class="md-result-info">
+            <div class="md-result-title">${escapeHtml(r.title)}</div>
+            <div class="md-result-provider">${escapeHtml(r.provider_name)}</div>
+          </div>
+        </div>`
+        )
+        .join('');
+
+      mdSearchResults.querySelectorAll('.md-result-card').forEach((card, idx) => {
+        card.addEventListener('click', () => {
+          mdSearchResults
+            .querySelectorAll('.md-result-card')
+            .forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          mdSelectedResult = results[idx];
+          mdLinkBtn.disabled = false;
+        });
+      });
+    } catch (err) {
+      mdSearchLoading.style.display = 'none';
+      mdSearchError.textContent = err.message;
+      mdSearchError.style.display = 'block';
+    }
+  };
+
+  const handleMetadataLink = async () => {
+    if (!mdSelectedResult || !state.currentFolderId) return;
+
+    mdLinkBtn.disabled = true;
+    mdLinkBtn.innerHTML =
+      '<div class="md-spinner" style="width:14px;height:14px;border-width:2px;"></div> Linking...';
+    mdSearchError.style.display = 'none';
+
+    try {
+      const res = await fetch(`/api/folders/${state.currentFolderId}/metadata/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_name: mdSelectedResult.provider_name,
+          provider_id: mdSelectedResult.result_id,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Link failed (HTTP ${res.status})`);
+      }
+
+      closeMetadataSearchModal();
+      toast.success('Metadata linked successfully');
+      fetchAndRenderMetadataPanel(state.currentFolderId);
+    } catch (err) {
+      mdSearchError.textContent = err.message;
+      mdSearchError.style.display = 'block';
+    } finally {
+      mdLinkBtn.innerHTML = '<i class="ph-bold ph-link"></i> Link';
+      mdLinkBtn.disabled = !mdSelectedResult;
+    }
+  };
+
+  const handleMetadataRefresh = async folderId => {
+    const refreshBtn = metadataPanel.querySelector('#md-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML =
+        '<div class="md-spinner" style="width:12px;height:12px;border-width:2px;"></div> Refreshing...';
+    }
+
+    try {
+      const res = await fetch(`/api/folders/${folderId}/metadata/refresh`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Refresh failed (HTTP ${res.status})`);
+      }
+      toast.success('Metadata refreshed');
+      fetchAndRenderMetadataPanel(folderId);
+    } catch (err) {
+      toast.error(err.message);
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<i class="ph-bold ph-arrows-clockwise"></i> Refresh';
+      }
+    }
+  };
+
+  const handleMetadataReset = async folderId => {
+    if (!confirm('This will clear all metadata but keep the provider link. Continue?')) return;
+
+    try {
+      const res = await fetch(`/api/folders/${folderId}/metadata/reset`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Reset failed (HTTP ${res.status})`);
+      }
+      toast.success('Metadata reset');
+      fetchAndRenderMetadataPanel(folderId);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleMetadataUnlink = async folderId => {
+    if (!confirm('This will remove all metadata AND the provider link. Continue?')) return;
+
+    try {
+      const res = await fetch(`/api/folders/${folderId}/metadata/unlink`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Unlink failed (HTTP ${res.status})`);
+      }
+      toast.success('Metadata unlinked');
+      fetchAndRenderMetadataPanel(folderId);
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
@@ -985,7 +1194,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.key === 'Escape' && editFolderModal.style.display === 'flex') {
       editFolderModal.style.display = 'none';
     }
+    if (e.key === 'Escape' && metadataSearchModal.style.display === 'flex') {
+      closeMetadataSearchModal();
+    }
   });
+
+  linkMetadataBtn.addEventListener('click', openMetadataSearchModal);
+
+  mdSearchBtn.addEventListener('click', performMetadataSearch);
+  mdSearchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      performMetadataSearch();
+    }
+  });
+  mdLinkBtn.addEventListener('click', handleMetadataLink);
+  mdSearchCloseBtn.addEventListener('click', closeMetadataSearchModal);
+  mdSearchCancelBtn.addEventListener('click', closeMetadataSearchModal);
+  metadataSearchModal.addEventListener('click', e => {
+    if (e.target === metadataSearchModal) {
+      closeMetadataSearchModal();
+    }
+  });
+
   tagInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();

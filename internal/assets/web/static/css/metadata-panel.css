@@ -395,3 +395,236 @@
     max-width: 120px;
   }
 }
+
+/* Metadata Search Modal */
+.md-search-modal .md-search-modal-content {
+  max-width: 640px;
+  width: 90%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.md-search-modal .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.md-search-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.md-search-input {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.md-search-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.md-search-btn {
+  background: var(--accent-color);
+  color: white;
+  border: 2px solid var(--accent-color);
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.md-search-btn:hover {
+  background: var(--accent-color-dark);
+  border-color: var(--accent-color-dark);
+}
+
+.md-search-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+  border: 1.5px solid var(--danger-color);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.md-search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  color: var(--subtle-text-color);
+  font-size: 0.9rem;
+}
+
+.md-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: md-spin 0.7s linear infinite;
+}
+
+@keyframes md-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.md-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.md-search-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--subtle-text-color);
+  font-size: 0.9rem;
+}
+
+.md-result-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.md-result-card:hover {
+  border-color: var(--accent-color);
+  background: rgba(var(--accent-color-rgb), 0.05);
+}
+
+.md-result-card.selected {
+  border-color: var(--accent-color);
+  background: rgba(var(--accent-color-rgb), 0.1);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.md-result-thumb {
+  width: 48px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--border-color);
+}
+
+.md-result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.md-result-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 0.2rem;
+  word-break: break-word;
+}
+
+.md-result-provider {
+  font-size: 0.75rem;
+  color: var(--subtle-text-color);
+  text-transform: capitalize;
+}
+
+.md-link-btn {
+  background: var(--accent-color);
+  color: white;
+  border: 2px solid var(--accent-color);
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.md-link-btn:hover:not(:disabled) {
+  background: var(--accent-color-dark);
+  border-color: var(--accent-color-dark);
+}
+
+.md-link-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Metadata panel action buttons */
+.md-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.md-action-btn {
+  background: none;
+  border: 1.5px solid var(--border-color);
+  color: var(--text-color);
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.md-action-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.md-action-btn.md-danger-btn {
+  color: var(--subtle-text-color);
+  opacity: 0.7;
+}
+
+.md-action-btn.md-danger-btn:hover {
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+  opacity: 1;
+}
+
+.md-actions-spacer {
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  .md-search-modal .md-search-modal-content {
+    width: 95%;
+  }
+
+  .md-search-input-row {
+    flex-direction: column;
+  }
+}
