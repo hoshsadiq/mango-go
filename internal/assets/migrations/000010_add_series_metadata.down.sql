@@ -1,0 +1,14 @@
+DROP INDEX IF EXISTS idx_series_metadata_titles_mid;
+DROP INDEX IF EXISTS idx_series_metadata_links_mid;
+DROP INDEX IF EXISTS idx_series_metadata_authors_mid;
+DROP INDEX IF EXISTS idx_series_metadata_tags_mid;
+DROP INDEX IF EXISTS idx_series_metadata_genres_mid;
+DROP INDEX IF EXISTS idx_series_provider_link_folder;
+DROP INDEX IF EXISTS idx_series_metadata_folder;
+DROP TABLE IF EXISTS series_metadata_titles;
+DROP TABLE IF EXISTS series_metadata_links;
+DROP TABLE IF EXISTS series_metadata_authors;
+DROP TABLE IF EXISTS series_metadata_tags;
+DROP TABLE IF EXISTS series_metadata_genres;
+DROP TABLE IF EXISTS series_metadata;
+DROP TABLE IF EXISTS series_provider_link;
