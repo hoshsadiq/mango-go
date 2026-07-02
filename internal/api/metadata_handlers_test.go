@@ -963,3 +963,354 @@ func TestHandleUnlinkMetadata_RemovesProviderLink(t *testing.T) {
 		t.Errorf("expected ErrProviderLinkNotFound, got %v", err)
 	}
 }
+
+func TestHandleEditMetadata_PresentFieldUpdates(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/EditUpdate", "EditUpdate", nil)
+
+	status := metadata.SeriesStatusOngoing
+	title := "Original Title"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{
+		Status: &status,
+		Title:  &title,
+	}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+
+	body := `{"status":"COMPLETED","title":"New Title"}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			Status *string `json:"status"`
+			Title  *string `json:"title"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.Status == nil || *resp.Metadata.Status != "COMPLETED" {
+		t.Errorf("status: got %v, want COMPLETED", resp.Metadata.Status)
+	}
+	if resp.Metadata.Title == nil || *resp.Metadata.Title != "New Title" {
+		t.Errorf("title: got %v, want New Title", resp.Metadata.Title)
+	}
+}
+
+func TestHandleEditMetadata_AbsentFieldUntouched(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/EditAbsent", "EditAbsent", nil)
+
+	status := metadata.SeriesStatusOngoing
+	title := "Original Title"
+	summary := "Original Summary"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{
+		Status:  &status,
+		Title:   &title,
+		Summary: &summary,
+	}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+
+	body := `{"title":"New Title"}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			Status  *string `json:"status"`
+			Title   *string `json:"title"`
+			Summary *string `json:"summary"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.Title == nil || *resp.Metadata.Title != "New Title" {
+		t.Errorf("title: got %v, want New Title", resp.Metadata.Title)
+	}
+	if resp.Metadata.Status == nil || *resp.Metadata.Status != "ONGOING" {
+		t.Errorf("status should be unchanged ONGOING, got %v", resp.Metadata.Status)
+	}
+	if resp.Metadata.Summary == nil || *resp.Metadata.Summary != "Original Summary" {
+		t.Errorf("summary should be unchanged, got %v", resp.Metadata.Summary)
+	}
+}
+
+func TestHandleEditMetadata_NullClearsAndLocks(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/EditNull", "EditNull", nil)
+
+	title := "Will Be Cleared"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{
+		Title: &title,
+	}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+
+	body := `{"title":null}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			Title *string `json:"title"`
+			Locks struct {
+				Title bool `json:"title"`
+			} `json:"locks"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.Title != nil {
+		t.Errorf("title should be null after clearing, got %v", *resp.Metadata.Title)
+	}
+	if !resp.Metadata.Locks.Title {
+		t.Errorf("title_lock should be true after null update (auto-lock)")
+	}
+}
+
+func TestHandleEditMetadata_InvalidEnum_Returns400(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/EditBadEnum", "EditBadEnum", nil)
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"invalid status", `{"status":"INVALID"}`},
+		{"invalid reading_direction", `{"reading_direction":"DIAGONAL"}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), strings.NewReader(tc.body))
+			req.AddCookie(cookie)
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleEditMetadata_InvalidNumericRange_Returns400(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/EditBadNum", "EditBadNum", nil)
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"negative age_rating", `{"age_rating":-1}`},
+		{"community_score too high", `{"community_score":10.1}`},
+		{"community_score negative", `{"community_score":-0.1}`},
+		{"release_year too short", `{"release_year":99}`},
+		{"release_year too long", `{"release_year":10000}`},
+		{"release_month zero", `{"release_month":0}`},
+		{"release_month 13", `{"release_month":13}`},
+		{"release_day zero", `{"release_day":0}`},
+		{"release_day 32", `{"release_day":32}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), strings.NewReader(tc.body))
+			req.AddCookie(cookie)
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleEditMetadata_CreatesRowIfNoneExists(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/EditCreate", "EditCreate", nil)
+
+	body := `{"title":"Created From Scratch"}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Metadata struct {
+			Title *string `json:"title"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Metadata.Title == nil || *resp.Metadata.Title != "Created From Scratch" {
+		t.Errorf("title: got %v, want 'Created From Scratch'", resp.Metadata.Title)
+	}
+
+	row, err := server.Store().GetSeriesMetadata(folder.ID)
+	if err != nil {
+		t.Fatalf("GetSeriesMetadata should succeed after edit: %v", err)
+	}
+	if !row.Title.Valid || row.Title.String != "Created From Scratch" {
+		t.Errorf("store title: got %v", row.Title)
+	}
+}
+
+func TestHandleEditLocks_TogglesOnlySpecified(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/LockToggle", "LockToggle", nil)
+
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+
+	body := `{"status_lock":true,"title_lock":true}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata/locks", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Status  bool `json:"status"`
+		Title   bool `json:"title"`
+		Summary bool `json:"summary"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !resp.Status {
+		t.Error("status should be true")
+	}
+	if !resp.Title {
+		t.Error("title should be true")
+	}
+	if resp.Summary {
+		t.Error("summary should be false (not toggled)")
+	}
+
+	body2 := `{"status_lock":false}`
+	req2, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata/locks", folder.ID), strings.NewReader(body2))
+	req2.AddCookie(cookie)
+	rr2 := httptest.NewRecorder()
+	router.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr2.Code, rr2.Body.String())
+	}
+
+	var resp2 struct {
+		Status bool `json:"status"`
+		Title  bool `json:"title"`
+	}
+	if err := json.Unmarshal(rr2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp2.Status {
+		t.Error("status should be false after toggle off")
+	}
+	if !resp2.Title {
+		t.Error("title should still be true (not toggled)")
+	}
+}
+
+func TestHandleEditLocks_NoMetadata_Returns404(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/LockNoMeta", "LockNoMeta", nil)
+
+	body := `{"status_lock":true}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata/locks", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if errResp["error"] != "no metadata found for this folder" {
+		t.Errorf("error message: got %q", errResp["error"])
+	}
+}
+
+func TestHandleEditLocks_ReturnsFullLockState(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	server.SetMetadataProvider(&mockMetadataProvider{})
+	folder, _ := server.Store().CreateFolder("/library/LockFull", "LockFull", nil)
+
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+
+	body := `{"genres_lock":true}`
+	req, _ := http.NewRequest("PATCH", fmt.Sprintf("/api/folders/%d/metadata/locks", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	expectedFields := []string{
+		"status", "title", "summary", "publisher", "reading_direction",
+		"age_rating", "language", "total_book_count", "community_score",
+		"release_date", "thumbnail_url", "genres", "tags", "authors",
+		"links", "titles",
+	}
+	for _, field := range expectedFields {
+		if _, ok := resp[field]; !ok {
+			t.Errorf("response missing lock field: %s", field)
+		}
+	}
+
+	if genres, ok := resp["genres"].(bool); !ok || !genres {
+		t.Errorf("genres should be true, got %v", resp["genres"])
+	}
+	if status, ok := resp["status"].(bool); !ok || status {
+		t.Errorf("status should be false, got %v", resp["status"])
+	}
+}

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -434,5 +435,342 @@ func (s *Server) handleUnlinkMetadata(w http.ResponseWriter, r *http.Request) {
 
 	RespondWithJSON(w, http.StatusOK, map[string]string{
 		"status": "unlinked",
+	})
+}
+
+// validStatuses is the set of accepted SeriesStatus values for the edit endpoint.
+var validStatuses = map[string]bool{
+	"ONGOING":   true,
+	"COMPLETED": true,
+	"ABANDONED": true,
+	"HIATUS":    true,
+}
+
+// validReadingDirections is the set of accepted ReadingDirection values for the edit endpoint.
+var validReadingDirections = map[string]bool{
+	"LEFT_TO_RIGHT": true,
+	"RIGHT_TO_LEFT": true,
+	"VERTICAL":      true,
+	"WEBTOON":       true,
+}
+
+// validLockFieldNames enumerates the lock column names accepted by the locks endpoint.
+var validLockFieldNames = map[string]bool{
+	"status_lock":            true,
+	"title_lock":             true,
+	"summary_lock":           true,
+	"publisher_lock":         true,
+	"reading_direction_lock": true,
+	"age_rating_lock":        true,
+	"language_lock":          true,
+	"total_book_count_lock":  true,
+	"community_score_lock":   true,
+	"release_date_lock":      true,
+	"thumbnail_url_lock":     true,
+	"genres_lock":            true,
+	"tags_lock":              true,
+	"authors_lock":           true,
+	"links_lock":             true,
+	"titles_lock":            true,
+}
+
+// handleEditMetadata handles PATCH /api/folders/{folderID}/metadata.
+// Only fields PRESENT in the JSON body are updated; absent fields are left
+// untouched; a field present with explicit null clears it (and auto-locks).
+func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
+	folderID, err := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	if err != nil || folderID <= 0 {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folder ID")
+		return
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Collect validated field updates before applying any.
+	type fieldUpdate struct {
+		name  string
+		value interface{} // nil means clear (set to NULL)
+	}
+	var updates []fieldUpdate
+
+	for key, raw := range body {
+		isNull := string(raw) == "null"
+
+		switch key {
+		case "status":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v string
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for status: expected string")
+					return
+				}
+				if !validStatuses[v] {
+					RespondWithError(w, http.StatusBadRequest, "invalid status: must be one of ONGOING, COMPLETED, ABANDONED, HIATUS")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "title", "summary", "publisher", "language", "thumbnail_url":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v string
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("invalid value for %s: expected string", key))
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "reading_direction":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v string
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for reading_direction: expected string")
+					return
+				}
+				if !validReadingDirections[v] {
+					RespondWithError(w, http.StatusBadRequest, "invalid reading_direction: must be one of LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "age_rating":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v int64
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for age_rating: expected integer")
+					return
+				}
+				if v < 0 {
+					RespondWithError(w, http.StatusBadRequest, "invalid age_rating: must be non-negative")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "total_book_count":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v int64
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for total_book_count: expected integer")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "community_score":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v float64
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for community_score: expected number")
+					return
+				}
+				if v < 0.0 || v > 10.0 {
+					RespondWithError(w, http.StatusBadRequest, "invalid community_score: must be between 0.0 and 10.0")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "release_year":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v int64
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for release_year: expected integer")
+					return
+				}
+				if v < 1000 || v > 9999 {
+					RespondWithError(w, http.StatusBadRequest, "invalid release_year: must be a 4-digit year")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "release_month":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v int64
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for release_month: expected integer")
+					return
+				}
+				if v < 1 || v > 12 {
+					RespondWithError(w, http.StatusBadRequest, "invalid release_month: must be between 1 and 12")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		case "release_day":
+			if isNull {
+				updates = append(updates, fieldUpdate{key, nil})
+			} else {
+				var v int64
+				if err := json.Unmarshal(raw, &v); err != nil {
+					RespondWithError(w, http.StatusBadRequest, "invalid value for release_day: expected integer")
+					return
+				}
+				if v < 1 || v > 31 {
+					RespondWithError(w, http.StatusBadRequest, "invalid release_day: must be between 1 and 31")
+					return
+				}
+				updates = append(updates, fieldUpdate{key, v})
+			}
+
+		default:
+			// Unknown or collection fields — ignored (Task 10 is scalar-only).
+		}
+	}
+
+	// Ensure metadata row exists (Task 10: create if absent, do not 404).
+	if _, err := s.store.GetSeriesMetadata(folderID); err != nil {
+		if !errors.Is(err, store.ErrMetadataNotFound) {
+			log.Printf("GetSeriesMetadata(%d): %v", folderID, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
+			return
+		}
+		if err := s.store.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{}); err != nil {
+			log.Printf("UpsertSeriesMetadata(%d): %v", folderID, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to create metadata record")
+			return
+		}
+	}
+
+	// Apply all validated field updates.
+	for _, u := range updates {
+		if err := s.store.UpdateMetadataField(folderID, u.name, u.value); err != nil {
+			log.Printf("UpdateMetadataField(%d, %q): %v", folderID, u.name, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to update field: "+u.name)
+			return
+		}
+	}
+
+	// Read back the full metadata and return in same format as GET.
+	row, err := s.store.GetSeriesMetadata(folderID)
+	if err != nil {
+		log.Printf("GetSeriesMetadata(%d) after edit: %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata after update")
+		return
+	}
+
+	resp := getMetadataResponse{
+		Metadata: buildMetadataFieldsResponse(row),
+	}
+
+	link, err := s.store.GetProviderLink(folderID)
+	if err != nil {
+		if !errors.Is(err, store.ErrProviderLinkNotFound) {
+			log.Printf("GetProviderLink(%d): %v", folderID, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to load provider link")
+			return
+		}
+	} else {
+		resp.Provider = &providerResponse{
+			Name: link.ProviderName,
+			ID:   link.ProviderID,
+		}
+	}
+
+	RespondWithJSON(w, http.StatusOK, resp)
+}
+
+// handleEditLocks handles PATCH /api/folders/{folderID}/metadata/locks.
+// Only lock keys present in the JSON body are toggled. Returns 404 if no
+// metadata record exists. Returns the complete current lock state.
+func (s *Server) handleEditLocks(w http.ResponseWriter, r *http.Request) {
+	folderID, err := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	if err != nil || folderID <= 0 {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folder ID")
+		return
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	locks := make(map[string]bool)
+	for key, raw := range body {
+		if !validLockFieldNames[key] {
+			RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("unknown lock field: %s", key))
+			return
+		}
+		var v bool
+		if err := json.Unmarshal(raw, &v); err != nil {
+			RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("invalid value for %s: expected boolean", key))
+			return
+		}
+		locks[key] = v
+	}
+
+	if len(locks) > 0 {
+		if err := s.store.UpdateMetadataLocks(folderID, locks); err != nil {
+			if errors.Is(err, store.ErrMetadataNotFound) {
+				RespondWithError(w, http.StatusNotFound, "no metadata found for this folder")
+				return
+			}
+			log.Printf("UpdateMetadataLocks(%d): %v", folderID, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to update locks")
+			return
+		}
+	} else {
+		// Empty body — still check existence for 404.
+		if _, err := s.store.GetSeriesMetadata(folderID); err != nil {
+			if errors.Is(err, store.ErrMetadataNotFound) {
+				RespondWithError(w, http.StatusNotFound, "no metadata found for this folder")
+				return
+			}
+			log.Printf("GetSeriesMetadata(%d): %v", folderID, err)
+			RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
+			return
+		}
+	}
+
+	// Read back full lock state.
+	row, err := s.store.GetSeriesMetadata(folderID)
+	if err != nil {
+		log.Printf("GetSeriesMetadata(%d) after lock update: %v", folderID, err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
+		return
+	}
+
+	RespondWithJSON(w, http.StatusOK, metadataLocksResponse{
+		Status:           row.StatusLock,
+		Title:            row.TitleLock,
+		Summary:          row.SummaryLock,
+		Publisher:        row.PublisherLock,
+		ReadingDirection: row.ReadingDirectionLock,
+		AgeRating:        row.AgeRatingLock,
+		Language:         row.LanguageLock,
+		TotalBookCount:   row.TotalBookCountLock,
+		CommunityScore:   row.CommunityScoreLock,
+		ReleaseDate:      row.ReleaseDateLock,
+		ThumbnailURL:     row.ThumbnailURLLock,
+		Genres:           row.GenresLock,
+		Tags:             row.TagsLock,
+		Authors:          row.AuthorsLock,
+		Links:            row.LinksLock,
+		Titles:           row.TitlesLock,
 	})
 }

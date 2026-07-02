@@ -119,6 +119,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/folders/{folderID}/metadata/refresh", s.handleRefreshMetadata)
 			r.Post("/folders/{folderID}/metadata/reset", s.handleResetMetadata)
 			r.Post("/folders/{folderID}/metadata/unlink", s.handleUnlinkMetadata)
+			r.Patch("/folders/{folderID}/metadata", s.handleEditMetadata)
+			r.Patch("/folders/{folderID}/metadata/locks", s.handleEditLocks)
 			r.Get("/folders/{folderID}/chapters/{chapterID}/neighbors", s.handleGetChapterNeighbors)
 
 			// Metadata Search
