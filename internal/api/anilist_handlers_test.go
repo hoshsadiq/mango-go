@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +20,7 @@ type mockAnilistSearcher struct {
 	err   error
 }
 
-func (m *mockAnilistSearcher) SearchManga(title string) (*anilist.Media, error) {
+func (m *mockAnilistSearcher) SearchManga(_ context.Context, title string) (*anilist.Media, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

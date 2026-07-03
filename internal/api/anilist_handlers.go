@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/vrsandeep/mango-go/internal/anilist"
 	"github.com/vrsandeep/mango-go/internal/store"
 )
 
@@ -88,12 +87,7 @@ func (s *Server) handlePostFolderAnilist(w http.ResponseWriter, r *http.Request)
 		RespondWithError(w, http.StatusInternalServerError, "Failed to load folder")
 		return
 	}
-	var media *anilist.Media
-	if s.anilistSearcher != nil {
-		media, err = s.anilistSearcher.SearchManga(folder.Name)
-	} else {
-		media, err = anilist.SearchManga(folder.Name)
-	}
+	media, err := s.anilistSearcher.SearchManga(r.Context(), folder.Name)
 	if err != nil {
 		log.Printf("AniList SearchManga error: %v", err)
 		RespondWithError(w, http.StatusBadGateway, "Failed to fetch from AniList")

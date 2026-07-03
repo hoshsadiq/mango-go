@@ -346,6 +346,32 @@ func TestGetMediaFull_HTTPError(t *testing.T) {
 	}
 }
 
+func TestSearchManga_EmptyOrInvalidTitle_ReturnsNil(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("HTTP handler should not be called for empty/invalid titles")
+	})
+
+	tests := []struct {
+		name  string
+		title string
+	}{
+		{"empty", ""},
+		{"whitespace", "   "},
+		{"only special chars", "***"},
+		{"only punctuation", "!@#..."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			media, err := client.SearchManga(context.Background(), tt.title)
+			if err != nil {
+				t.Fatalf("SearchManga(%q): %v", tt.title, err)
+			}
+			if media != nil {
+				t.Errorf("SearchManga(%q): expected nil, got %+v", tt.title, media)
+			}
+		})
+	}
+}
 func assertEqual[T comparable](t *testing.T, name string, got, want T) {
 	t.Helper()
 	if got != want {

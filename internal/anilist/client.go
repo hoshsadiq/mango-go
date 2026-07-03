@@ -241,6 +241,31 @@ func cleanTitleForSearch(title string) string {
 	return s
 }
 
+func (c *Client) SearchManga(ctx context.Context, title string) (*Media, error) {
+	cleaned := cleanTitleForSearch(title)
+	if cleaned == "" {
+		return nil, nil
+	}
+	results, err := c.SearchMediaFull(ctx, cleaned, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, nil
+	}
+	m := results[0]
+	var coverImage *CoverImage
+	if m.CoverImage.Large != "" {
+		coverImage = &CoverImage{Large: m.CoverImage.Large}
+	}
+	return &Media{
+		ID:         int64(m.ID),
+		SiteURL:    m.SiteURL,
+		Title:      &Title{Romaji: m.Title.Romaji, English: m.Title.English},
+		CoverImage: coverImage,
+	}, nil
+}
+
 // SearchMediaFull searches AniList for manga matching the query.
 // Returns an empty slice when there are no results.
 // Queries longer than 400 runes are truncated on rune boundaries.
