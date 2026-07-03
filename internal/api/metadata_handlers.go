@@ -281,6 +281,12 @@ func (s *Server) fetchAndStoreMetadata(w http.ResponseWriter, r *http.Request, f
 		return
 	}
 
+	for _, name := range meta.Tags {
+		if _, err := s.store.AddTagToFolder(folderID, name, "anilist"); err != nil {
+			log.Printf("AddTagToFolder(%d, %q, \"anilist\") tag: %v", folderID, name, err)
+		}
+	}
+
 	row, err := s.store.GetSeriesMetadata(folderID)
 	if err != nil {
 		log.Printf("GetSeriesMetadata(%d) after upsert: %v", folderID, err)

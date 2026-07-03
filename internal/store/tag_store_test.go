@@ -16,7 +16,7 @@ func TestAddTagToFolder(t *testing.T) {
 	t.Run("Add Tag To Folder", func(t *testing.T) {
 
 		// Add a tag to the folder
-		tag, err := s.AddTagToFolder(folder.ID, "action")
+		tag, err := s.AddTagToFolder(folder.ID, "action", "user")
 		if err != nil {
 			t.Fatalf("Failed to add tag to folder: %v", err)
 		}
@@ -25,7 +25,7 @@ func TestAddTagToFolder(t *testing.T) {
 		}
 
 		// Add the same tag again (should not error, should not duplicate)
-		tag2, err := s.AddTagToFolder(folder.ID, "action")
+		tag2, err := s.AddTagToFolder(folder.ID, "action", "user")
 		if err != nil {
 			t.Fatalf("Failed to add duplicate tag to folder: %v", err)
 		}

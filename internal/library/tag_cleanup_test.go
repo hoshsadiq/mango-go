@@ -33,11 +33,11 @@ func TestDeleteEmptyTags(t *testing.T) {
 	}
 
 	// Add tags to folders to create them
-	_, err = st.AddTagToFolder(folder1.ID, tag1.Name)
+	_, err = st.AddTagToFolder(folder1.ID, tag1.Name, "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag1 to folder: %v", err)
 	}
-	_, err = st.AddTagToFolder(folder2.ID, tag2.Name)
+	_, err = st.AddTagToFolder(folder2.ID, tag2.Name, "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag2 to folder: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestDeleteEmptyTagsWithNoEmptyTags(t *testing.T) {
 	}
 
 	// Add a tag to the folder
-	_, err = st.AddTagToFolder(folder.ID, "Test Tag")
+	_, err = st.AddTagToFolder(folder.ID, "Test Tag", "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag to folder: %v", err)
 	}

@@ -374,7 +374,7 @@ func TestListItems(t *testing.T) {
 	}
 
 	// Add tag to folder
-	tag, err := s.AddTagToFolder(vol1.ID, "action")
+	tag, err := s.AddTagToFolder(vol1.ID, "action", "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag to folder: %v", err)
 	}
@@ -743,12 +743,12 @@ func TestGetFolderWithTags(t *testing.T) {
 	}
 
 	// Add tags to the folder
-	_, err = s.AddTagToFolder(folder.ID, "action")
+	_, err = s.AddTagToFolder(folder.ID, "action", "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag 'action': %v", err)
 	}
 
-	_, err = s.AddTagToFolder(folder.ID, "adventure")
+	_, err = s.AddTagToFolder(folder.ID, "adventure", "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag 'adventure': %v", err)
 	}

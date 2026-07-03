@@ -1,0 +1,1 @@
+ALTER TABLE folder_tags ADD COLUMN source TEXT NOT NULL DEFAULT 'user';

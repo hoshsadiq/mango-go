@@ -42,7 +42,8 @@ func (s *Store) GetTagByID(id int64) (*models.Tag, error) {
 }
 
 // AddTagToFolder creates the association between a folder and a tag.
-func (s *Store) AddTagToFolder(folderID int64, tagName string) (*models.Tag, error) {
+// source indicates where the tag came from (e.g. "user", "anilist").
+func (s *Store) AddTagToFolder(folderID int64, tagName string, source string) (*models.Tag, error) {
 	// Use a single transaction for the entire operation
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -75,7 +76,7 @@ func (s *Store) AddTagToFolder(folderID int64, tagName string) (*models.Tag, err
 	}
 
 	// Insert folder-tag association within the same transaction
-	_, err = tx.Exec("INSERT OR IGNORE INTO folder_tags (folder_id, tag_id) VALUES (?, ?)", folderID, tag.ID)
+	_, err = tx.Exec("INSERT OR IGNORE INTO folder_tags (folder_id, tag_id, source) VALUES (?, ?, ?)", folderID, tag.ID, source)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			// If the tag is already associated with the folder, ignore the error
@@ -86,6 +87,12 @@ func (s *Store) AddTagToFolder(folderID int64, tagName string) (*models.Tag, err
 
 	return &models.Tag{ID: tag.ID, Name: tag.Name}, tx.Commit()
 
+}
+
+// RemoveTagsBySource removes all folder-tag associations for a given folder that came from a specific source.
+func (s *Store) RemoveTagsBySource(folderID int64, source string) error {
+	_, err := s.db.Exec("DELETE FROM folder_tags WHERE folder_id = ? AND source = ?", folderID, source)
+	return err
 }
 
 // RemoveTagFromFolder removes the association between a folder and a tag.

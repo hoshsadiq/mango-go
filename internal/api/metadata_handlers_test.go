@@ -1309,3 +1309,229 @@ func TestHandleEditLocks_ReturnsFullLockState(t *testing.T) {
 		t.Errorf("status should be false, got %v", resp["status"])
 	}
 }
+
+func TestHandleLinkMetadata_MergesTagsIntoFolderTags(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/TagMerge", "TagMerge", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMeta: &metadata.SeriesMetadata{
+			Genres: []string{"Action", "Adventure"},
+			Tags:   []string{"Shounen", "Martial Arts"},
+		},
+		coverURL: "",
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"100"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	f, err := server.Store().GetFolder(folder.ID)
+	if err != nil {
+		t.Fatalf("GetFolder: %v", err)
+	}
+
+	tagNames := make(map[string]bool)
+	for _, tag := range f.Tags {
+		tagNames[tag.Name] = true
+	}
+
+	// Only Tags should be merged into folder tags, NOT Genres
+	expected := []string{"shounen", "martial arts"}
+	for _, name := range expected {
+		if !tagNames[name] {
+			t.Errorf("expected folder tag %q, got tags: %v", name, tagNames)
+		}
+	}
+	// Genres ("action", "adventure") must NOT appear as folder tags
+	for _, name := range []string{"action", "adventure"} {
+		if tagNames[name] {
+			t.Errorf("genre %q should NOT be merged into folder tags, got tags: %v", name, tagNames)
+		}
+	}
+	if len(f.Tags) != 2 {
+		t.Errorf("expected 2 folder tags, got %d", len(f.Tags))
+	}
+}
+
+func TestHandleLinkMetadata_TagMergeIdempotent(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/TagIdempotent", "TagIdempotent", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMeta: &metadata.SeriesMetadata{
+			Genres: []string{"Action"},
+			Tags:   []string{"Shounen", "Martial Arts"},
+		},
+		coverURL: "",
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"200"}`
+
+	req1, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req1.AddCookie(cookie)
+	rr1 := httptest.NewRecorder()
+	router.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("first link: expected 200, got %d body=%s", rr1.Code, rr1.Body.String())
+	}
+
+	req2, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req2.AddCookie(cookie)
+	rr2 := httptest.NewRecorder()
+	router.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("second link: expected 200, got %d body=%s", rr2.Code, rr2.Body.String())
+	}
+
+	f, err := server.Store().GetFolder(folder.ID)
+	if err != nil {
+		t.Fatalf("GetFolder: %v", err)
+	}
+	if len(f.Tags) != 2 {
+		names := make([]string, len(f.Tags))
+		for i, tag := range f.Tags {
+			names[i] = tag.Name
+		}
+		t.Errorf("expected 2 folder tags (no duplicates), got %d: %v", len(f.Tags), names)
+	}
+}
+
+func TestHandleLinkMetadata_TagMergeFailureNonFatal(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/TagPartialFail", "TagPartialFail", nil)
+
+	mock := &mockMetadataProvider{
+		seriesMeta: &metadata.SeriesMetadata{
+			Genres: []string{"Action"},
+			Tags:   []string{"Shounen", "  ", "Martial Arts"},
+		},
+		coverURL: "",
+	}
+	server.SetMetadataProvider(mock)
+
+	body := `{"provider_name":"anilist","provider_id":"300"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 (non-fatal tag failure), got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	f, err := server.Store().GetFolder(folder.ID)
+	if err != nil {
+		t.Fatalf("GetFolder: %v", err)
+	}
+	tagNames := make(map[string]bool)
+	for _, tag := range f.Tags {
+		tagNames[tag.Name] = true
+	}
+	if !tagNames["shounen"] {
+		t.Error("expected folder tag 'shounen' to be present")
+	}
+	if !tagNames["martial arts"] {
+		t.Error("expected folder tag 'martial arts' to be present")
+	}
+}
+
+func TestHandleUnlinkMetadata_DoesNotRemoveFolderTags(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/UnlinkKeepTags", "UnlinkKeepTags", nil)
+
+	server.Store().AddTagToFolder(folder.ID, "action", "user")
+	server.Store().AddTagToFolder(folder.ID, "shounen", "anilist")
+	server.Store().AddTagToFolder(folder.ID, "martial arts", "anilist")
+
+	title := "Tagged Series"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "50"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/unlink", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	f, err := server.Store().GetFolder(folder.ID)
+	if err != nil {
+		t.Fatalf("GetFolder: %v", err)
+	}
+	if len(f.Tags) != 1 {
+		t.Errorf("expected 1 user tag preserved after unlink (anilist tags removed), got %d", len(f.Tags))
+	}
+	tagNames := map[string]bool{}
+	for _, tag := range f.Tags {
+		tagNames[tag.Name] = true
+	}
+	if !tagNames["action"] {
+		t.Error("expected user tag 'action' to be preserved after unlink")
+	}
+	if tagNames["shounen"] || tagNames["martial arts"] {
+		t.Error("expected anilist tags to be removed after unlink")
+	}
+}
+
+func TestHandleResetMetadata_DoesNotRemoveFolderTags(t *testing.T) {
+	server, router, cookie := setupMetadataTestData(t)
+	folder, _ := server.Store().CreateFolder("/library/ResetKeepTags", "ResetKeepTags", nil)
+
+	server.Store().AddTagToFolder(folder.ID, "action", "user")
+	server.Store().AddTagToFolder(folder.ID, "shounen", "anilist")
+	server.Store().AddTagToFolder(folder.ID, "martial arts", "anilist")
+
+	title := "Tagged Series"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "60"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+
+	server.SetMetadataProvider(&mockMetadataProvider{seriesMeta: newTestMeta()})
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/reset", folder.ID), nil)
+	req.AddCookie(cookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	f, err := server.Store().GetFolder(folder.ID)
+	if err != nil {
+		t.Fatalf("GetFolder: %v", err)
+	}
+	if len(f.Tags) != 1 {
+		t.Errorf("expected 1 user tag preserved after reset (anilist tags removed), got %d", len(f.Tags))
+	}
+	tagNames := map[string]bool{}
+	for _, tag := range f.Tags {
+		tagNames[tag.Name] = true
+	}
+	if !tagNames["action"] {
+		t.Error("expected user tag 'action' to be preserved after reset")
+	}
+	if tagNames["shounen"] || tagNames["martial arts"] {
+		t.Error("expected anilist tags to be removed after reset")
+	}
+}

@@ -620,5 +620,9 @@ func (s *Store) resetMetadataInTx(tx *sql.Tx, folderID int64) error {
 			return err
 		}
 	}
+
+	if _, err = tx.Exec("DELETE FROM folder_tags WHERE folder_id = ? AND source != 'user'", folderID); err != nil {
+		return err
+	}
 	return nil
 }
