@@ -77,9 +77,62 @@
   box-shadow: 0 4px 12px rgba(var(--accent-color-rgb), 0.3);
 }
 
-/* AniList Button — styled to match .md-icon-btn */
-.anilist-button {
+/* Cover container — wraps folder thumbnail for overlay positioning */
+.cover-container {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Shared overlay button style for cover overlays */
+.cover-overlay-btn {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+  transition:
+    opacity 0.2s ease,
+    background 0.2s ease;
+  z-index: 2;
   text-decoration: none;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.cover-overlay-btn:hover,
+.cover-overlay-btn:focus {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Edit cover overlay — bottom-right of cover */
+.cover-edit-btn {
+  bottom: 6px;
+  right: 6px;
+}
+
+/* Lock overlay — top-right of cover */
+.cover-lock-btn {
+  top: 6px;
+  right: 6px;
+  font-size: 12px;
+}
+
+.cover-lock-btn.md-lock-unlocked {
+  opacity: 0.35;
+}
+
+.cover-lock-btn.md-lock-unlocked:hover,
+.cover-lock-btn.md-lock-unlocked:focus {
+  opacity: 0.9;
 }
 
 .anilist-icon {
@@ -151,10 +204,16 @@
   animation: fadeIn 0.3s ease;
 }
 
-/* Left side of page header: title + status badge + metadata actions */
+/* Left side of page header: two visual rows — hero (title+badge) then actions */
 .page-header-left {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.page-header-hero {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -316,7 +375,7 @@
   overflow-y: auto;
   border: 2px solid var(--border-color);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  animation: slideIn 0.3s ease;
+  animation: modalSlideIn 0.3s ease;
   margin-top: 0;
   margin-bottom: 2rem;
 }
@@ -400,7 +459,7 @@
   border-radius: 8px;
   background: rgba(var(--accent-color-rgb), 0.1);
   margin-top: 0.5rem;
-  animation: slideIn 0.3s ease;
+  animation: modalSlideIn 0.3s ease;
 }
 
 .selected-file-info i {
@@ -486,8 +545,9 @@
 }
 
 .header-thumb {
-  width: 100px;
-  height: 140px;
+  width: 140px;
+  height: auto;
+  aspect-ratio: 5 / 7;
   object-fit: cover;
   border-radius: 8px;
   border: 2px solid var(--border-color);
@@ -505,7 +565,7 @@
   }
 }
 
-@keyframes slideIn {
+@keyframes modalSlideIn {
   from {
     opacity: 0;
     transform: scale(0.9);
@@ -542,8 +602,26 @@
   }
 
   .header-thumb {
-    width: 80px;
-    height: 112px;
+    width: 100px;
+    height: auto;
+    aspect-ratio: 5 / 7;
+  }
+
+  .cover-overlay-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+
+  .cover-edit-btn {
+    bottom: 4px;
+    right: 4px;
+  }
+
+  .cover-lock-btn {
+    top: 4px;
+    right: 4px;
+    font-size: 10px;
   }
 
   /* Mobile modal positioning */
@@ -698,7 +776,7 @@
   cursor: pointer;
   font-size: 1.1rem;
   color: var(--border-color);
-  padding: 0;
+  padding: 0.35rem;
   transition: color 0.1s;
 }
 
@@ -922,6 +1000,37 @@
 .action-btn:hover {
   border-color: var(--accent-color);
   color: var(--accent-color);
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 0.5rem;
+}
+
+.empty-state i {
+  font-size: 3rem;
+  opacity: 0.3;
+  color: var(--text-color);
+}
+
+.empty-state-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.empty-state-subtitle {
+  font-size: 0.9rem;
+  color: var(--subtle-text-color);
+  margin: 0;
+  text-align: center;
+  max-width: 360px;
 }
 
 /* Narrow modal for cover-only edit */

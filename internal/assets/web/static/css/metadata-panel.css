@@ -214,8 +214,9 @@
 
 /* Section labels */
 .md-section-label {
-  font-size: 0.78rem;
-  color: var(--subtle-text-color);
+  font-size: 0.85rem;
+  color: var(--text-color);
+  opacity: 0.75;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -845,6 +846,34 @@
 .md-add-row-btn:hover {
   border-color: var(--accent-color);
   color: var(--accent-color);
+}
+
+.md-edit-sticky-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--card-bg);
+  border-top: 1.5px solid var(--border-color);
+  padding: 0.6rem 0;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.md-edit-collection-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid var(--warning-color);
+  border-radius: 6px;
+  color: var(--warning-color);
+}
+
+.md-icon-btn.md-icon-danger {
+  color: var(--danger-color);
+  opacity: 0.7;
+}
+
+.md-icon-btn.md-icon-danger:hover {
+  opacity: 1;
 }
 
 @media (max-width: 480px) {

@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pageTitleEl = document.getElementById('page-title');
   const breadcrumbEl = document.getElementById('breadcrumb-container');
   const folderThumb = document.getElementById('folder-thumb');
+  const coverContainer = document.getElementById('cover-container');
   const searchInput = document.getElementById('search-input');
   const sortBySelect = document.getElementById('sort-by');
   const sortDirBtn = document.getElementById('sort-dir-btn');
@@ -111,7 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Use setTimeout to ensure this runs after the main rendering is complete
     setTimeout(async () => {
       // Skip if button already exists
-      if (document.querySelector('.anilist-button')) return;
+      if (document.querySelector('.anilist-header-btn')) return;
       const folderId = getFolderIdFromUrl();
       if (!folderId) return; // Only show AniList button when viewing a specific folder
 
@@ -126,16 +127,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 100); // Small delay to ensure DOM is ready
   };
 
-  // Appends the AniList link button into the existing header-actions row.
-  // Inserting here (rather than wrapping the h1) avoids breaking the flex layout.
   const addAniListButtonToHeader = anilistUrl => {
-    // Guard: skip if the container is missing/hidden or the button was already added
-    if (!mdHeaderActions || document.querySelector('.anilist-button')) return;
+    if (!mdHeaderActions || document.querySelector('.anilist-header-btn')) return;
 
     const button = document.createElement('a');
     button.href = anilistUrl;
     button.target = '_blank';
-    button.className = 'anilist-button md-icon-btn';
+    button.className = 'md-icon-btn anilist-header-btn';
     button.title = 'View on AniList';
 
     const icon = document.createElement('img');
@@ -154,6 +152,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  };
+
+  const LANGUAGE_NAMES = {
+    ja: 'Japanese',
+    en: 'English',
+    ko: 'Korean',
+    zh: 'Chinese',
+    fr: 'French',
+    de: 'German',
+    es: 'Spanish',
+    it: 'Italian',
+    pt: 'Portuguese',
+    ru: 'Russian',
+    ar: 'Arabic',
+    th: 'Thai',
+    vi: 'Vietnamese',
+    id: 'Indonesian',
+    ms: 'Malay',
+    tl: 'Filipino',
   };
 
   const formatReadingDirection = val => {
@@ -175,14 +192,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const formatReleaseDate = (year, month, day) => {
     if (!year) return null;
-    let date = String(year);
-    if (month) {
-      date += '-' + String(month).padStart(2, '0');
-      if (day) {
-        date += '-' + String(day).padStart(2, '0');
+    if (month && day) {
+      const d = new Date(year, month - 1, day);
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        }).format(d);
       }
     }
-    return date;
+    if (month) {
+      const d = new Date(year, month - 1, 1);
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat(undefined, {
+          year: 'numeric',
+          month: 'short',
+        }).format(d);
+      }
+    }
+    return String(year);
   };
 
   // Lock icon helper, now always renders an icon (clickable toggle).
@@ -346,11 +375,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (editMode) {
       html += '<div class="md-header">';
       html += '<span class="md-actions-spacer"></span>';
-      html += `<button class="md-action-btn md-save-btn" id="md-save-btn" title="Edited fields are automatically locked to prevent provider overwrite"><i class="ph-bold ph-floppy-disk"></i> Save</button>`;
-      html += `<button class="md-action-btn" id="md-cancel-btn"><i class="ph-bold ph-x"></i> Cancel</button>`;
+      html += `<button class="md-action-btn md-save-btn md-save-btn-top" title="Edited fields are automatically locked to prevent provider overwrite"><i class="ph-bold ph-floppy-disk"></i> Save</button>`;
+      html += `<button class="md-action-btn md-cancel-btn-top"><i class="ph-bold ph-x"></i> Cancel</button>`;
       html += '</div>';
       html +=
         '<div class="md-edit-save-note"><i class="ph-bold ph-info"></i> Edited fields are automatically locked to prevent provider overwrite.</div>';
+      html +=
+        '<div class="md-edit-save-note md-edit-collection-warning"><i class="ph-bold ph-warning"></i> Collection fields (titles, authors, links) are read-only — editing is not yet supported by the API.</div>';
     }
 
     if (editMode) {
@@ -360,7 +391,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         html += renderAltTitleRow(t, i);
       });
       html += `<button class="md-add-row-btn" id="md-add-title-btn" type="button"><i class="ph-bold ph-plus"></i> Add Title</button>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
       html += '</div>';
     } else if (md.titles && md.titles.length > 0) {
       html += '<div class="md-alt-titles">';
@@ -422,7 +452,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += `<div class="md-info-item"><span class="md-info-label">Language${lockIconHtml(locks.language, 'language_lock')}</span>`;
       html += `<input type="text" class="md-edit-input" data-field="language" value="${escapeHtml(md.language || '')}" placeholder="e.g. ja"></div>`;
     } else if (md.language) {
-      html += `<div class="md-info-item"><span class="md-info-label">Language</span><span class="md-info-value">${escapeHtml(md.language)}</span>${lockIconHtml(locks.language, 'language_lock')}</div>`;
+      html += `<div class="md-info-item"><span class="md-info-label">Language</span><span class="md-info-value">${escapeHtml(LANGUAGE_NAMES[md.language] || md.language)}</span>${lockIconHtml(locks.language, 'language_lock')}</div>`;
     }
 
     if (editMode) {
@@ -462,7 +492,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           html += renderAuthorRow(a, i);
         });
         html += `<button class="md-add-row-btn" id="md-add-author-btn" type="button"><i class="ph-bold ph-plus"></i> Add Author</button>`;
-        html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
         html += '</div>';
       } else {
         html += '<div class="md-authors">';
@@ -492,7 +521,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           html += renderLinkRow(l, i);
         });
         html += `<button class="md-add-row-btn" id="md-add-link-btn" type="button"><i class="ph-bold ph-plus"></i> Add Link</button>`;
-        html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
         html += '</div>';
       } else {
         html += '<div class="md-links">';
@@ -505,6 +533,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
+    if (editMode) {
+      html += '<div class="md-edit-sticky-bar">';
+      html += `<button class="md-action-btn md-save-btn md-save-btn-bottom" title="Save changes"><i class="ph-bold ph-floppy-disk"></i> Save</button>`;
+      html += `<button class="md-action-btn md-cancel-btn-bottom"><i class="ph-bold ph-x"></i> Cancel</button>`;
+      html += '</div>';
+    }
+
     return html;
   };
 
@@ -512,13 +547,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     attachLockListeners(folderId);
 
     if (editMode) {
-      // Save button
-      const saveBtn = metadataPanel.querySelector('#md-save-btn');
-      if (saveBtn) saveBtn.addEventListener('click', () => handleMetadataSave(folderId));
+      metadataPanel.querySelectorAll('.md-save-btn-top, .md-save-btn-bottom').forEach(btn => {
+        btn.addEventListener('click', () => handleMetadataSave(folderId));
+      });
 
-      // Cancel button
-      const cancelBtn = metadataPanel.querySelector('#md-cancel-btn');
-      if (cancelBtn) cancelBtn.addEventListener('click', handleMetadataCancel);
+      metadataPanel.querySelectorAll('.md-cancel-btn-top, .md-cancel-btn-bottom').forEach(btn => {
+        btn.addEventListener('click', handleMetadataCancel);
+      });
 
       // Add author row
       const addAuthorBtn = metadataPanel.querySelector('#md-add-author-btn');
@@ -725,12 +760,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const saveBtn = metadataPanel.querySelector('#md-save-btn');
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.innerHTML =
+    const saveBtns = metadataPanel.querySelectorAll('.md-save-btn-top, .md-save-btn-bottom');
+    saveBtns.forEach(btn => {
+      btn.disabled = true;
+      btn.innerHTML =
         '<div class="md-spinner" style="width:12px;height:12px;border-width:2px;"></div> Saving...';
-    }
+    });
 
     try {
       const res = await fetch(`/api/folders/${folderId}/metadata`, {
@@ -749,11 +784,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetchAndRenderMetadataPanel(folderId);
     } catch (err) {
       toast.error(err.message);
-      // Stay in edit mode, re-enable save button
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save';
-      }
+      saveBtns.forEach(btn => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save';
+      });
     }
   };
 
@@ -784,6 +818,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     mdHeaderActions.style.display = provider ? 'inline-flex' : 'none';
+
+    if (md.thumbnail_url) {
+      folderThumb.src = md.thumbnail_url;
+      removeCoverLock();
+      const lockEl = document.createElement('i');
+      const isLocked = !!locks.thumbnail_url;
+      lockEl.className =
+        'ph-bold ' +
+        (isLocked ? 'ph-lock' : 'ph-lock-open') +
+        ' md-lock md-lock-toggle cover-overlay-btn cover-lock-btn' +
+        (isLocked ? '' : ' md-lock-unlocked');
+      lockEl.dataset.lockField = 'thumbnail_url_lock';
+      lockEl.dataset.locked = String(isLocked);
+      lockEl.title = isLocked
+        ? "Locked: this field won't be changed on refresh"
+        : 'Unlocked: this field will be updated on refresh';
+      coverContainer.appendChild(lockEl);
+    }
+  };
+
+  const removeCoverLock = () => {
+    coverContainer.querySelectorAll('.cover-lock-btn').forEach(el => el.remove());
   };
 
   const clearMetadataFromHeader = () => {
@@ -792,6 +848,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     mdStatusBadge.style.display = 'none';
     communityScoreWidget.style.display = 'none';
     mdHeaderActions.style.display = 'none';
+    document.querySelectorAll('.anilist-header-btn').forEach(el => el.remove());
+    if (folderThumb.dataset.originalSrc) {
+      folderThumb.src = folderThumb.dataset.originalSrc;
+    }
+    removeCoverLock();
   };
 
   const refreshFolderTags = async folderId => {
@@ -1203,9 +1264,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const response = await fetch(url);
     const path = await response.json();
 
+    const sep =
+      '<i class="ph-bold ph-caret-right" style="font-size: 0.7rem; vertical-align: middle; margin: 0 0.25rem; opacity: 0.5;"></i>';
     let html = '<a href="/library">Library</a>';
     path.forEach(folder => {
-      html += ` / <a href="/library/folder/${folder.id}">${folder.name}</a>`;
+      html += `${sep}<a href="/library/folder/${folder.id}">${folder.name}</a>`;
     });
     breadcrumbEl.innerHTML = html;
   };
@@ -1219,9 +1282,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     ) {
       const hasActiveFilter =
         state.search || state.unreadOnly || state.filterTagId || state.currentTagId;
-      cardsGrid.innerHTML = hasActiveFilter
-        ? '<p>No results found.</p>'
-        : '<p>This folder is empty.</p>';
+      if (hasActiveFilter) {
+        cardsGrid.innerHTML = '<p>No results found.</p>';
+      } else {
+        cardsGrid.innerHTML =
+          '<div class="empty-state">' +
+          '<i class="ph-bold ph-folder-open"></i>' +
+          '<p class="empty-state-title">No chapters found</p>' +
+          '<p class="empty-state-subtitle">Add manga files to this folder and scan your library to see chapters here.</p>' +
+          '</div>';
+      }
       return;
     }
 
@@ -1247,15 +1317,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const progressPercent =
       folder.total_chapters > 0 ? (folder.read_chapters / folder.total_chapters) * 100 : 0;
     const ratingBadge = folder.rating ? `<div class="rating-badge">★ ${folder.rating}</div>` : '';
+    const progressBar =
+      progressPercent > 0
+        ? `<div class="progress-bar-container"><div class="progress-bar" style="width: ${progressPercent}%;"></div></div>`
+        : '';
     card.innerHTML = `
             <div class="thumbnail-container">
                 <img class="thumbnail" src="${folder.thumbnail || '/static/images/logo.svg'}" loading="lazy" alt="Cover for ${folder.name}">
                 ${ratingBadge}
             </div>
             <div class="item-title" title="${folder.name}">${folder.name}</div>
-            <div class="progress-bar-container">
-              <div class="progress-bar" style="width: ${progressPercent}%;"></div>
-            </div>
+            ${progressBar}
         `;
     return card;
   };
@@ -1267,14 +1339,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     card.href = `/reader/series/${chapter.folder_id}/chapters/${chapter.id}`; // Note: Reader URL might need adjustment
     card.className = 'item-card';
     const title = chapter.path.split(/[\\\\/]/).pop();
+    const progressBar =
+      progressPercent > 0
+        ? `<div class="progress-bar-container"><div class="progress-bar" style="width: ${progressPercent}%;"></div></div>`
+        : '';
     card.innerHTML = `
             <div class="thumbnail-container">
-                <img class="thumbnail" src="${chapter.thumbnail || ''}" loading="lazy" alt="Cover for ${title}">
+                <img class="thumbnail" src="${chapter.thumbnail || '/static/images/logo.svg'}" loading="lazy" alt="Cover for ${title}" onerror="this.src='/static/images/logo.svg'">
             </div>
             <div class="item-title" title="${title}">${title}</div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${progressPercent}%;"></div>
-            </div>
+            ${progressBar}
         `;
     return card;
   };
@@ -1359,7 +1433,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       document.title = `${pageTitleEl.textContent} - Mango`;
       folderThumb.src = data.current_folder ? data.current_folder.thumbnail : '';
-      folderThumb.style.display = data.current_folder ? 'block' : 'none';
+      folderThumb.dataset.originalSrc = data.current_folder ? data.current_folder.thumbnail : '';
+      coverContainer.style.display = data.current_folder ? 'inline-block' : 'none';
 
       const inFolder = !!data.current_folder;
 
@@ -1394,6 +1469,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       state.totalItems = parseInt(response.headers.get('X-Total-Count') || '0', 10);
       totalCountEl.textContent = `${state.totalItems}`;
+
+      const libraryControls = document.querySelector('.library-controls');
+      const hasContent = state.totalItems > 0 || state.search || state.unreadOnly;
+      if (libraryControls) libraryControls.style.display = hasContent ? '' : 'none';
+
       renderPagination();
     } catch (error) {
       console.error('Error loading folder contents:', error);
@@ -1489,6 +1569,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Renders inline folder tags with collapse/expand behaviour.
   // preserveExpanded=true keeps the current expand state (used after add/remove/toggle);
   // false (default) resets to collapsed when navigating to a new folder.
+  // TODO: distinguish tag sources when API exposes source field
   const renderTags = (tags, preserveExpanded = false) => {
     if (!preserveExpanded) tagsExpanded = false;
     currentFolderTags = tags || [];
@@ -1761,9 +1842,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   markAllReadBtn.addEventListener('click', async () => {
+    if (!confirm('Mark all chapters as read?')) return;
     markAllAs(true);
   });
   markAllUnreadBtn.addEventListener('click', async () => {
+    if (!confirm('Mark all chapters as unread?')) return;
     markAllAs(false);
   });
 
@@ -1780,7 +1863,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const init = async () => {
     state.currentFolderId = getFolderIdFromUrl();
     state.currentTagId = getTagIdFromUrl();
-    await loadAllTags(); // Load tags for autocomplete
+
+    document.querySelectorAll('.nav-links a').forEach(a => {
+      if (
+        a.pathname === window.location.pathname ||
+        (a.pathname !== '/' && window.location.pathname.startsWith(a.pathname + '/'))
+      ) {
+        a.classList.add('nav-active');
+      }
+    });
+
+    await loadAllTags();
     await loadFolderContents();
   };
 

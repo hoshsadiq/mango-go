@@ -43,10 +43,17 @@
     <main class="container">
         <nav class="breadcrumb" id="breadcrumb-container"></nav>
         <div class="page-header">
-            <img id="folder-thumb" class="header-thumb" style="display: none;">
+            <div class="cover-container" id="cover-container" style="display: none;">
+                <img id="folder-thumb" class="header-thumb">
+                <button class="cover-overlay-btn cover-edit-btn" id="edit-folder-btn" style="display: none;" title="Edit Cover">
+                    <i class="ph-bold ph-image"></i>
+                </button>
+            </div>
             <div class="page-header-left">
-                <h1 id="page-title">Library</h1>
-                <span class="md-status-badge" id="md-status-badge" style="display: none;"></span>
+                <div class="page-header-hero">
+                    <h1 id="page-title">Library</h1>
+                    <span class="md-status-badge" id="md-status-badge" style="display: none;"></span>
+                </div>
                 <div class="md-header-actions" id="md-header-actions" style="display: none;">
                     <button class="md-icon-btn" id="md-edit-btn" title="Edit metadata"><i class="ph-bold ph-pencil-simple"></i></button>
                     <button class="md-icon-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i></button>
@@ -59,15 +66,12 @@
                 <div class="rating-widget" id="rating-widget" style="display: none;" title="Rate this series">
                     <span class="rating-label">Rating:</span>
                     <div class="rating-stars" id="rating-stars"></div>
-                    <button class="rating-clear-btn" id="rating-clear-btn" title="Clear rating">×</button>
+                    <button class="rating-clear-btn" id="rating-clear-btn" title="Clear rating" aria-label="Clear rating">×</button>
                 </div>
                 <div class="community-score-widget" id="community-score-widget" style="display: none;">
                     <span class="cs-label">Community:</span>
                     <span class="cs-value" id="cs-value"></span>
                 </div>
-                <button class="edit-btn" id="edit-folder-btn" style="display: none;" title="Edit Cover">
-                    <i class="ph-bold ph-image"></i>
-                </button>
             </div>
         </div>
 
