@@ -37,6 +37,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const folderTagsSection = document.getElementById('folder-tags-section');
   const metadataPanel = document.getElementById('metadata-panel');
   const noMetadataPrompt = document.getElementById('no-metadata-prompt');
+  const mdStatusBadge = document.getElementById('md-status-badge');
+  const mdHeaderActions = document.getElementById('md-header-actions');
+  const communityScoreWidget = document.getElementById('community-score-widget');
+  const csValue = document.getElementById('cs-value');
+
+  const mdEditBtn = document.getElementById('md-edit-btn');
+  const mdRefreshBtn = document.getElementById('md-refresh-btn');
+  const mdRelinkBtn = document.getElementById('md-relink-btn');
+  const mdResetBtn = document.getElementById('md-reset-btn');
+  const mdUnlinkBtn = document.getElementById('md-unlink-btn');
   const metadataSearchModal = document.getElementById('metadata-search-modal');
   const mdSearchInput = document.getElementById('md-search-input');
   const mdSearchBtn = document.getElementById('md-search-btn');
@@ -68,9 +78,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let tagsExpanded = false;
   let filterChipsExpanded = false;
   let mdSelectedResult = null;
-  let mdOriginalMetadata = null; // Last-fetched metadata for diff/cancel
-  let mdOriginalProvider = null; // Last-fetched provider for reference
+  let mdOriginalMetadata = null;
+  let mdOriginalProvider = null;
   let mdEditMode = false;
+  let originalFolderName = '';
   const TAGS_COLLAPSED_LIMIT = 8;
   const FILTER_CHIPS_LIMIT = 10;
 
@@ -118,14 +129,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Appends the AniList link button into the existing header-actions row.
   // Inserting here (rather than wrapping the h1) avoids breaking the flex layout.
   const addAniListButtonToHeader = anilistUrl => {
-    const headerActions = document.querySelector('.header-actions');
-    // Guard: skip if the container is missing or the button was already added
-    if (!headerActions || document.querySelector('.anilist-button')) return;
+    // Guard: skip if the container is missing/hidden or the button was already added
+    if (!mdHeaderActions || document.querySelector('.anilist-button')) return;
 
     const button = document.createElement('a');
     button.href = anilistUrl;
     button.target = '_blank';
-    button.className = 'anilist-button';
+    button.className = 'anilist-button md-icon-btn';
+    button.title = 'View on AniList';
 
     const icon = document.createElement('img');
     icon.src = '/static/images/anilist-icon.svg';
@@ -133,7 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     icon.className = 'anilist-icon';
 
     button.appendChild(icon);
-    headerActions.appendChild(button);
+    mdHeaderActions.appendChild(button);
   };
 
   const escapeHtml = str => {
@@ -202,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (mdOriginalMetadata) {
         mdOriginalMetadata.locks = locks;
       }
-      const icon = metadataPanel.querySelector(`.md-lock-toggle[data-lock-field="${lockField}"]`);
+      const icon = document.querySelector(`.md-lock-toggle[data-lock-field="${lockField}"]`);
       if (icon) {
         const isLocked = locks[lockFieldToResponseKey(lockField)];
         icon.dataset.locked = String(isLocked);
@@ -219,7 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const attachLockListeners = folderId => {
-    metadataPanel.querySelectorAll('.md-lock-toggle').forEach(icon => {
+    document.querySelectorAll('.md-lock-toggle').forEach(icon => {
       icon.addEventListener('click', e => {
         e.stopPropagation();
         const lockField = icon.dataset.lockField;
@@ -276,62 +287,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (errEl) errEl.style.display = 'none';
   };
 
-  // --- Chip input helper for arrays ---
-  const renderChipInput = (items, fieldName, editable) => {
-    let html = `<div class="md-chip-input-container" data-field="${fieldName}">`;
-    html += '<div class="md-chips">';
-    (items || []).forEach((item, idx) => {
-      html += `<span class="md-chip">${escapeHtml(item)}`;
-      if (editable) {
-        html += ` <button class="md-chip-remove" data-idx="${idx}" type="button">&times;</button>`;
-      }
-      html += '</span>';
-    });
-    html += '</div>';
-    if (editable) {
-      html += `<div class="md-chip-add-row">`;
-      html += `<input type="text" class="md-chip-new-input" placeholder="Type and press Enter" data-field="${fieldName}">`;
-      html += `</div>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
-    }
-    html += '</div>';
-    return html;
-  };
-
-  const attachChipListeners = () => {
-    metadataPanel.querySelectorAll('.md-chip-input-container').forEach(container => {
-      const field = container.dataset.field;
-      container.querySelectorAll('.md-chip-remove').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const chip = btn.closest('.md-chip');
-          chip.remove();
-        });
-      });
-      const input = container.querySelector('.md-chip-new-input');
-      if (input) {
-        input.addEventListener('keydown', e => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            const val = input.value.trim();
-            if (!val) return;
-            const existing = Array.from(container.querySelectorAll('.md-chip')).map(c =>
-              c.textContent.replace('×', '').trim()
-            );
-            if (existing.includes(val)) {
-              input.value = '';
-              return;
-            }
-            const chip = document.createElement('span');
-            chip.className = 'md-chip';
-            chip.innerHTML = `${escapeHtml(val)} <button class="md-chip-remove" type="button">&times;</button>`;
-            chip.querySelector('.md-chip-remove').addEventListener('click', () => chip.remove());
-            container.querySelector('.md-chips').appendChild(chip);
-            input.value = '';
-          }
-        });
-      }
-    });
-  };
 
   // --- Authors edit helpers ---
   const AUTHOR_ROLES = [
@@ -385,67 +340,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     return html;
   };
 
-  // --- Build panel HTML (shared between view and edit modes) ---
   const buildMetadataPanelHtml = (md, locks, provider, editMode) => {
     let html = '';
 
-    // Header with title + status + edit button
-    html += '<div class="md-header">';
     if (editMode) {
-      html += `<input type="text" class="md-edit-input md-edit-title" data-field="title" value="${escapeHtml(md.title || '')}" placeholder="Title">`;
-      html += lockIconHtml(locks.title, 'title_lock');
-      html += `<select class="md-edit-select md-edit-status" data-field="status">`;
-      html += `<option value=""${!md.status ? ' selected' : ''}>— No status —</option>`;
-      ['ONGOING', 'COMPLETED', 'ABANDONED', 'HIATUS'].forEach(s => {
-        html += `<option value="${s}"${md.status === s ? ' selected' : ''}>${s}</option>`;
-      });
-      html += `</select>`;
-      html += lockIconHtml(locks.status, 'status_lock');
-    } else {
-      const hasTitle = md.title && md.title.trim();
-      const hasStatus = md.status;
-      if (hasTitle) {
-        html += `<h2 class="md-title">${escapeHtml(md.title)}${lockIconHtml(locks.title, 'title_lock')}</h2>`;
-      }
-      if (hasStatus) {
-        const statusClass = md.status.toLowerCase();
-        html += `<span class="md-status-badge ${statusClass}">${escapeHtml(md.status)}${lockIconHtml(locks.status, 'status_lock')}</span>`;
-      }
-      if (!hasTitle && !hasStatus) {
-        // Still show edit button area
-      }
-    }
-    // Edit/Save/Cancel buttons
-    if (editMode) {
+      html += '<div class="md-header">';
       html += '<span class="md-actions-spacer"></span>';
       html += `<button class="md-action-btn md-save-btn" id="md-save-btn" title="Edited fields are automatically locked to prevent provider overwrite"><i class="ph-bold ph-floppy-disk"></i> Save</button>`;
       html += `<button class="md-action-btn" id="md-cancel-btn"><i class="ph-bold ph-x"></i> Cancel</button>`;
-    } else {
-      html += '<span class="md-actions-spacer"></span>';
-      html += `<button class="md-action-btn" id="md-edit-btn"><i class="ph-bold ph-pencil-simple"></i> Edit</button>`;
-    }
-    html += '</div>';
-
-    // Provider actions row
-    if (provider && !editMode) {
-      const providerLabel = provider.name.charAt(0).toUpperCase() + provider.name.slice(1);
-      html += '<div class="md-actions">';
-      html += `<span class="md-provider-link"><i class="ph-bold ph-link"></i> Linked to ${escapeHtml(providerLabel)}</span>`;
-      html += `<button class="md-action-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>`;
-      html += `<button class="md-action-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i> Re-link</button>`;
-      html += '<span class="md-actions-spacer"></span>';
-      html += `<button class="md-action-btn md-danger-btn" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i> Reset</button>`;
-      html += `<button class="md-action-btn md-danger-btn" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i> Unlink</button>`;
       html += '</div>';
-    }
-
-    // Save note (edit mode only)
-    if (editMode) {
       html +=
         '<div class="md-edit-save-note"><i class="ph-bold ph-info"></i> Edited fields are automatically locked to prevent provider overwrite.</div>';
     }
 
-    // Alternative titles
     if (editMode) {
       html += `<div class="md-section-label">Alternative Titles${lockIconHtml(locks.titles, 'titles_lock')}</div>`;
       html += '<div class="md-edit-collection" id="md-edit-titles">';
@@ -470,21 +377,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += '</ul></div>';
     }
 
-    // Summary
-    html += `<div class="md-summary">`;
-    html += `<div class="md-section-label">Summary${lockIconHtml(locks.summary, 'summary_lock')}</div>`;
-    if (editMode) {
-      html += `<textarea class="md-edit-textarea" data-field="summary" rows="4" placeholder="Summary">${escapeHtml(md.summary || '')}</textarea>`;
-    } else if (md.summary && md.summary.trim()) {
-      html += `<p class="md-summary-text collapsed">${escapeHtml(md.summary)}</p>`;
-      html += `<button class="md-summary-toggle" data-expanded="false">Show more</button>`;
+    if (editMode || (md.summary && md.summary.trim())) {
+      html += `<div class="md-summary">`;
+      html += `<div class="md-section-label">Summary${lockIconHtml(locks.summary, 'summary_lock')}</div>`;
+      if (editMode) {
+        html += `<textarea class="md-edit-textarea" data-field="summary" rows="4" placeholder="Summary">${escapeHtml(md.summary || '')}</textarea>`;
+      } else {
+        html += `<p class="md-summary-text collapsed">${escapeHtml(md.summary)}</p>`;
+        html += `<button class="md-summary-toggle" data-expanded="false">Show more</button>`;
+      }
+      html += '</div>';
     }
-    html += '</div>';
 
-    // Info grid, always show in edit mode, conditionally in view mode
+
     html += '<div class="md-info-grid">';
 
-    // Publisher
     if (editMode) {
       html += `<div class="md-info-item"><span class="md-info-label">Publisher${lockIconHtml(locks.publisher, 'publisher_lock')}</span>`;
       html += `<input type="text" class="md-edit-input" data-field="publisher" value="${escapeHtml(md.publisher || '')}"></div>`;
@@ -492,7 +399,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += `<div class="md-info-item"><span class="md-info-label">Publisher</span><span class="md-info-value">${escapeHtml(md.publisher)}</span>${lockIconHtml(locks.publisher, 'publisher_lock')}</div>`;
     }
 
-    // Reading Direction
     if (editMode) {
       html += `<div class="md-info-item"><span class="md-info-label">Direction${lockIconHtml(locks.reading_direction, 'reading_direction_lock')}</span>`;
       html += `<select class="md-edit-select" data-field="reading_direction">`;
@@ -505,7 +411,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += `<div class="md-info-item"><span class="md-info-label">Direction</span><span class="md-info-value">${escapeHtml(formatReadingDirection(md.reading_direction))}</span>${lockIconHtml(locks.reading_direction, 'reading_direction_lock')}</div>`;
     }
 
-    // Age Rating
     if (editMode) {
       html += `<div class="md-info-item"><span class="md-info-label">Age Rating${lockIconHtml(locks.age_rating, 'age_rating_lock')}</span>`;
       html += `<input type="number" class="md-edit-input md-edit-number" data-field="age_rating" min="0" step="1" value="${md.age_rating !== null && md.age_rating !== undefined ? md.age_rating : ''}" placeholder="e.g. 13"></div>`;
@@ -513,7 +418,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += `<div class="md-info-item"><span class="md-info-label">Age Rating</span><span class="md-info-value">${md.age_rating}+</span>${lockIconHtml(locks.age_rating, 'age_rating_lock')}</div>`;
     }
 
-    // Language
     if (editMode) {
       html += `<div class="md-info-item"><span class="md-info-label">Language${lockIconHtml(locks.language, 'language_lock')}</span>`;
       html += `<input type="text" class="md-edit-input" data-field="language" value="${escapeHtml(md.language || '')}" placeholder="e.g. ja"></div>`;
@@ -521,7 +425,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += `<div class="md-info-item"><span class="md-info-label">Language</span><span class="md-info-value">${escapeHtml(md.language)}</span>${lockIconHtml(locks.language, 'language_lock')}</div>`;
     }
 
-    // Total Book Count
     if (editMode) {
       html += `<div class="md-info-item"><span class="md-info-label">Volumes${lockIconHtml(locks.total_book_count, 'total_book_count_lock')}</span>`;
       html += `<input type="number" class="md-edit-input md-edit-number" data-field="total_book_count" step="1" value="${md.total_book_count !== null && md.total_book_count !== undefined ? md.total_book_count : ''}" placeholder="e.g. 10"></div>`;
@@ -529,7 +432,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += `<div class="md-info-item"><span class="md-info-label">Volumes</span><span class="md-info-value">${md.total_book_count}</span>${lockIconHtml(locks.total_book_count, 'total_book_count_lock')}</div>`;
     }
 
-    // Release Date (3 fields in edit mode)
     if (editMode) {
       html += `<div class="md-info-item md-release-date-edit"><span class="md-info-label">Released${lockIconHtml(locks.release_date, 'release_date_lock')}</span>`;
       html += `<input type="number" class="md-edit-input md-edit-number md-date-input" data-field="release_year" min="1000" max="9999" step="1" value="${md.release_year !== null && md.release_year !== undefined ? md.release_year : ''}" placeholder="Year">`;
@@ -543,94 +445,64 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    html += '</div>'; // end md-info-grid
+    html += '</div>';
 
-    // Community Score
     if (editMode) {
       html += '<div class="md-score">';
       html += `<span class="md-section-label">Community Score${lockIconHtml(locks.community_score, 'community_score_lock')}</span>`;
       html += `<input type="number" class="md-edit-input md-edit-number" data-field="community_score" min="0" max="10" step="0.1" value="${md.community_score !== null && md.community_score !== undefined ? md.community_score : ''}" placeholder="0.0 - 10.0">`;
       html += '</div>';
-    } else if (md.community_score !== null && md.community_score !== undefined) {
-      const pct = (md.community_score / 10) * 100;
-      html += '<div class="md-score">';
-      html += `<span class="md-section-label">Community Score${lockIconHtml(locks.community_score, 'community_score_lock')}</span>`;
-      html += `<span class="md-score-value">${md.community_score.toFixed(1)}/10</span>`;
-      html += `<div class="md-score-bar"><div class="md-score-fill" style="width: ${pct}%;"></div></div>`;
-      html += '</div>';
     }
 
-    // Genres
-    html += `<div class="md-section-label">Genres${lockIconHtml(locks.genres, 'genres_lock')}</div>`;
-    if (editMode) {
-      html += renderChipInput(md.genres, 'genres', true);
-    } else if (md.genres && md.genres.length > 0) {
-      html += '<div class="md-pills">';
-      md.genres.forEach(g => {
-        html += `<span class="md-genre-pill">${escapeHtml(g)}</span>`;
-      });
-      html += '</div>';
-    }
-
-    // Tags
-    html += `<div class="md-section-label">Tags${lockIconHtml(locks.tags, 'tags_lock')}</div>`;
-    if (editMode) {
-      html += renderChipInput(md.tags, 'tags', true);
-    } else if (md.tags && md.tags.length > 0) {
-      html += '<div class="md-pills">';
-      md.tags.forEach(t => {
-        html += `<span class="md-tag-pill">${escapeHtml(t)}</span>`;
-      });
-      html += '</div>';
-    }
-
-    // Authors
-    html += `<div class="md-section-label">Authors${lockIconHtml(locks.authors, 'authors_lock')}</div>`;
-    if (editMode) {
-      html += '<div class="md-edit-collection" id="md-edit-authors">';
-      (md.authors || []).forEach((a, i) => {
-        html += renderAuthorRow(a, i);
-      });
-      html += `<button class="md-add-row-btn" id="md-add-author-btn" type="button"><i class="ph-bold ph-plus"></i> Add Author</button>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
-      html += '</div>';
-    } else if (md.authors && md.authors.length > 0) {
-      html += '<div class="md-authors">';
-      const groups = {};
-      md.authors.forEach(a => {
-        const role = a.role || 'Other';
-        if (!groups[role]) groups[role] = [];
-        groups[role].push(a.name);
-      });
-      Object.entries(groups).forEach(([role, names]) => {
-        html += '<div class="md-author-group">';
-        html += `<div class="md-author-role">${escapeHtml(formatAuthorRole(role))}</div>`;
-        names.forEach(name => {
-          html += `<div class="md-author-name">${escapeHtml(name)}</div>`;
+    if (editMode || (md.authors && md.authors.length > 0)) {
+      html += `<div class="md-section-label">Authors${lockIconHtml(locks.authors, 'authors_lock')}</div>`;
+      if (editMode) {
+        html += '<div class="md-edit-collection" id="md-edit-authors">';
+        (md.authors || []).forEach((a, i) => {
+          html += renderAuthorRow(a, i);
+        });
+        html += `<button class="md-add-row-btn" id="md-add-author-btn" type="button"><i class="ph-bold ph-plus"></i> Add Author</button>`;
+        html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
+        html += '</div>';
+      } else {
+        html += '<div class="md-authors">';
+        const groups = {};
+        md.authors.forEach(a => {
+          const role = a.role || 'Other';
+          if (!groups[role]) groups[role] = [];
+          groups[role].push(a.name);
+        });
+        Object.entries(groups).forEach(([role, names]) => {
+          html += '<div class="md-author-group">';
+          html += `<div class="md-author-role">${escapeHtml(formatAuthorRole(role))}</div>`;
+          names.forEach(name => {
+            html += `<div class="md-author-name">${escapeHtml(name)}</div>`;
+          });
+          html += '</div>';
         });
         html += '</div>';
-      });
-      html += '</div>';
+      }
     }
 
-    // Links
-    html += `<div class="md-section-label">Links${lockIconHtml(locks.links, 'links_lock')}</div>`;
-    if (editMode) {
-      html += '<div class="md-edit-collection" id="md-edit-links">';
-      (md.links || []).forEach((l, i) => {
-        html += renderLinkRow(l, i);
-      });
-      html += `<button class="md-add-row-btn" id="md-add-link-btn" type="button"><i class="ph-bold ph-plus"></i> Add Link</button>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
-      html += '</div>';
-    } else if (md.links && md.links.length > 0) {
-      html += '<div class="md-links">';
-      md.links.forEach(link => {
-        html += `<a class="md-ext-link" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">`;
-        html += `<i class="ph-bold ph-arrow-square-out"></i> ${escapeHtml(link.label)}`;
-        html += '</a>';
-      });
-      html += '</div>';
+    if (editMode || (md.links && md.links.length > 0)) {
+      html += `<div class="md-section-label">Links${lockIconHtml(locks.links, 'links_lock')}</div>`;
+      if (editMode) {
+        html += '<div class="md-edit-collection" id="md-edit-links">';
+        (md.links || []).forEach((l, i) => {
+          html += renderLinkRow(l, i);
+        });
+        html += `<button class="md-add-row-btn" id="md-add-link-btn" type="button"><i class="ph-bold ph-plus"></i> Add Link</button>`;
+        html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
+        html += '</div>';
+      } else {
+        html += '<div class="md-links">';
+        md.links.forEach(link => {
+          html += `<a class="md-ext-link" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">`;
+          html += `<i class="ph-bold ph-arrow-square-out"></i> ${escapeHtml(link.label)}`;
+          html += '</a>';
+        });
+        html += '</div>';
+      }
     }
 
     return html;
@@ -647,9 +519,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Cancel button
       const cancelBtn = metadataPanel.querySelector('#md-cancel-btn');
       if (cancelBtn) cancelBtn.addEventListener('click', handleMetadataCancel);
-
-      // Chip input listeners
-      attachChipListeners();
 
       // Add author row
       const addAuthorBtn = metadataPanel.querySelector('#md-add-author-btn');
@@ -711,7 +580,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       });
     } else {
-      // View mode listeners
       const altTitlesToggle = metadataPanel.querySelector('.md-alt-titles-toggle');
       if (altTitlesToggle) {
         altTitlesToggle.addEventListener('click', () => {
@@ -739,40 +607,34 @@ document.addEventListener('DOMContentLoaded', async () => {
           summaryToggle.textContent = expanded ? 'Show more' : 'Show less';
         });
       }
-
-      // Edit button
-      const editBtn = metadataPanel.querySelector('#md-edit-btn');
-      if (editBtn) {
-        editBtn.addEventListener('click', () => enterEditMode(folderId));
-      }
-
-      // Action buttons
-      const refreshBtn = metadataPanel.querySelector('#md-refresh-btn');
-      if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => handleMetadataRefresh(folderId));
-      }
-      const relinkBtn = metadataPanel.querySelector('#md-relink-btn');
-      if (relinkBtn) {
-        relinkBtn.addEventListener('click', openMetadataSearchModal);
-      }
-      const resetBtn = metadataPanel.querySelector('#md-reset-btn');
-      if (resetBtn) {
-        resetBtn.addEventListener('click', () => handleMetadataReset(folderId));
-      }
-      const unlinkBtn = metadataPanel.querySelector('#md-unlink-btn');
-      if (unlinkBtn) {
-        unlinkBtn.addEventListener('click', () => handleMetadataUnlink(folderId));
-      }
     }
   };
 
   const enterEditMode = folderId => {
     if (!mdOriginalMetadata) return;
     mdEditMode = true;
+    mdHeaderActions.style.display = 'none';
+    communityScoreWidget.style.display = 'none';
     const md = mdOriginalMetadata;
     const locks = md.locks || {};
+
+    pageTitleEl.innerHTML =
+      `<input type="text" class="md-edit-input md-edit-title" data-field="title" value="${escapeHtml(md.title || '')}" placeholder="Title">` +
+      lockIconHtml(locks.title, 'title_lock');
+
+    let statusOpts = `<option value=""${!md.status ? ' selected' : ''}>— No status —</option>`;
+    ['ONGOING', 'COMPLETED', 'ABANDONED', 'HIATUS'].forEach(s => {
+      statusOpts += `<option value="${s}"${md.status === s ? ' selected' : ''}>${s}</option>`;
+    });
+    mdStatusBadge.className = 'md-status-badge';
+    mdStatusBadge.innerHTML =
+      `<select class="md-edit-select md-edit-status" data-field="status">${statusOpts}</select>` +
+      lockIconHtml(locks.status, 'status_lock');
+    mdStatusBadge.style.display = 'inline-flex';
+
     const html = buildMetadataPanelHtml(md, locks, mdOriginalProvider, true);
     metadataPanel.innerHTML = html;
+    metadataPanel.style.display = 'block';
     attachPanelListeners(folderId, true);
   };
 
@@ -781,8 +643,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!mdOriginalMetadata || !state.currentFolderId) return;
     const md = mdOriginalMetadata;
     const locks = md.locks || {};
+    renderMetadataInHeader(md, locks, mdOriginalProvider);
     const html = buildMetadataPanelHtml(md, locks, mdOriginalProvider, false);
     metadataPanel.innerHTML = html;
+    metadataPanel.style.display = html.trim() ? 'block' : 'none';
     attachPanelListeners(state.currentFolderId, false);
   };
 
@@ -791,7 +655,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const orig = mdOriginalMetadata;
 
     const getVal = field => {
-      const el = metadataPanel.querySelector(`[data-field="${field}"]`);
+      const el =
+        metadataPanel.querySelector(`[data-field="${field}"]`) ||
+        document.querySelector(`.page-header-left [data-field="${field}"]`);
       if (!el) return undefined;
       return el.value;
     };
@@ -891,6 +757,83 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
+  const renderMetadataInHeader = (md, locks, provider) => {
+    pageTitleEl.style.display = '';
+    if (md.title && md.title.trim()) {
+      pageTitleEl.innerHTML = escapeHtml(md.title) + lockIconHtml(locks.title, 'title_lock');
+    } else {
+      pageTitleEl.textContent = originalFolderName;
+    }
+
+    if (md.status) {
+      const statusClass = md.status.toLowerCase();
+      mdStatusBadge.className = `md-status-badge ${statusClass}`;
+      mdStatusBadge.innerHTML = escapeHtml(md.status) + lockIconHtml(locks.status, 'status_lock');
+      mdStatusBadge.style.display = 'inline-flex';
+    } else {
+      mdStatusBadge.style.display = 'none';
+    }
+
+    if (md.community_score !== null && md.community_score !== undefined) {
+      csValue.innerHTML =
+        `${md.community_score.toFixed(1)}/10` +
+        lockIconHtml(locks.community_score, 'community_score_lock');
+      communityScoreWidget.style.display = 'flex';
+    } else {
+      communityScoreWidget.style.display = 'none';
+    }
+
+    mdHeaderActions.style.display = provider ? 'inline-flex' : 'none';
+  };
+
+  const clearMetadataFromHeader = () => {
+    pageTitleEl.style.display = '';
+    pageTitleEl.textContent = originalFolderName;
+    mdStatusBadge.style.display = 'none';
+    communityScoreWidget.style.display = 'none';
+    mdHeaderActions.style.display = 'none';
+  };
+
+  const refreshFolderTags = async folderId => {
+    try {
+      const params = new URLSearchParams({
+        folderId,
+        page: 1,
+        per_page: 1,
+        sort_by: 'auto',
+        sort_dir: 'asc',
+      });
+      const res = await fetch(`/api/browse?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.current_folder) {
+          currentFolderTags = data.current_folder.tags || [];
+          renderTags(currentFolderTags, true);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to refresh folder tags:', e);
+    }
+  };
+
+  const hasMetadataContent = md => {
+    return !!(
+      md.title ||
+      md.status ||
+      (md.summary && md.summary.trim()) ||
+      md.publisher ||
+      md.reading_direction ||
+      md.language ||
+      (md.age_rating !== null && md.age_rating !== undefined) ||
+      (md.total_book_count !== null && md.total_book_count !== undefined) ||
+      (md.release_year !== null && md.release_year !== undefined) ||
+      (md.community_score !== null && md.community_score !== undefined) ||
+      (md.titles && md.titles.length > 0) ||
+      (md.authors && md.authors.length > 0) ||
+      (md.links && md.links.length > 0)
+    );
+  };
+
   const fetchAndRenderMetadataPanel = async folderId => {
     if (!folderId || !metadataPanel || !noMetadataPrompt) return;
 
@@ -899,7 +842,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (res.status === 404) {
         metadataPanel.style.display = 'none';
+        metadataPanel.innerHTML = '';
         noMetadataPrompt.style.display = 'block';
+        clearMetadataFromHeader();
         mdOriginalMetadata = null;
         mdOriginalProvider = null;
         mdEditMode = false;
@@ -915,16 +860,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const locks = md.locks || {};
       const provider = data.provider;
 
-      // Store original for diff/cancel
       mdOriginalMetadata = md;
       mdOriginalProvider = provider;
       mdEditMode = false;
 
       noMetadataPrompt.style.display = 'none';
 
+      renderMetadataInHeader(md, locks, provider);
+
       const html = buildMetadataPanelHtml(md, locks, provider, false);
 
-      if (!html.trim() && !provider) {
+      if (!hasMetadataContent(md) && !provider) {
         metadataPanel.style.display = 'none';
         metadataPanel.innerHTML = '';
         noMetadataPrompt.style.display = 'block';
@@ -932,8 +878,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       metadataPanel.innerHTML = html;
-      metadataPanel.style.display = 'block';
+      metadataPanel.style.display = html.trim() ? 'block' : 'none';
 
+      attachLockListeners(folderId);
       attachPanelListeners(folderId, false);
     } catch (error) {
       console.error('Error fetching metadata:', error);
@@ -947,7 +894,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     mdSearchResults.innerHTML = '';
     mdSearchError.style.display = 'none';
     mdSearchLoading.style.display = 'none';
-    mdSearchInput.value = pageTitleEl.textContent || '';
+    mdSearchInput.value = originalFolderName || pageTitleEl.textContent || '';
     metadataSearchModal.style.display = 'flex';
     mdSearchInput.focus();
     mdSearchInput.select();
@@ -1040,6 +987,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       closeMetadataSearchModal();
       toast.success('Metadata linked successfully');
       fetchAndRenderMetadataPanel(state.currentFolderId);
+      refreshFolderTags(state.currentFolderId);
     } catch (err) {
       mdSearchError.textContent = err.message;
       mdSearchError.style.display = 'block';
@@ -1050,12 +998,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleMetadataRefresh = async folderId => {
-    const refreshBtn = metadataPanel.querySelector('#md-refresh-btn');
-    if (refreshBtn) {
-      refreshBtn.disabled = true;
-      refreshBtn.innerHTML =
-        '<div class="md-spinner" style="width:12px;height:12px;border-width:2px;"></div> Refreshing...';
-    }
+    mdRefreshBtn.disabled = true;
 
     try {
       const res = await fetch(`/api/folders/${folderId}/metadata/refresh`, {
@@ -1067,12 +1010,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       toast.success('Metadata refreshed');
       fetchAndRenderMetadataPanel(folderId);
+      refreshFolderTags(folderId);
     } catch (err) {
       toast.error(err.message);
-      if (refreshBtn) {
-        refreshBtn.disabled = false;
-        refreshBtn.innerHTML = '<i class="ph-bold ph-arrows-clockwise"></i> Refresh';
-      }
+    } finally {
+      mdRefreshBtn.disabled = false;
     }
   };
 
@@ -1089,6 +1031,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       toast.success('Metadata reset');
       fetchAndRenderMetadataPanel(folderId);
+      refreshFolderTags(folderId);
     } catch (err) {
       toast.error(err.message);
     }
@@ -1107,6 +1050,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       toast.success('Metadata unlinked');
       fetchAndRenderMetadataPanel(folderId);
+      refreshFolderTags(folderId);
     } catch (err) {
       toast.error(err.message);
     }
@@ -1402,12 +1346,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       const data = await response.json();
 
       if (data.current_folder) {
+        originalFolderName = data.current_folder.name;
         pageTitleEl.textContent = data.current_folder.name;
       } else if (state.currentTagId) {
+        originalFolderName = '';
         const tagName = await getTagNameFromId(state.currentTagId);
         pageTitleEl.textContent = `Tag: ${tagName}`;
         document.title = `Tag: ${tagName} - Mango`;
       } else {
+        originalFolderName = '';
         pageTitleEl.textContent = 'Library';
       }
       document.title = `${pageTitleEl.textContent} - Mango`;
@@ -1416,13 +1363,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const inFolder = !!data.current_folder;
 
-      // Controls that only make sense when viewing a specific folder
       editFolderBtn.style.display = inFolder ? 'block' : 'none';
       progressActions.style.display = inFolder ? 'flex' : 'none';
       folderTagsSection.style.display = inFolder ? 'flex' : 'none';
       renderTags(inFolder ? data.current_folder.tags : []);
 
-      // Rating widget: show on folder detail pages only
       if (inFolder) {
         ratingWidget.style.display = 'flex';
         renderRating(data.current_folder.rating ?? null);
@@ -1436,6 +1381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         metadataPanel.style.display = 'none';
         metadataPanel.innerHTML = '';
         noMetadataPrompt.style.display = 'none';
+        clearMetadataFromHeader();
       }
 
       // Tag filter chips at root level
@@ -1732,6 +1678,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   linkMetadataBtn.addEventListener('click', openMetadataSearchModal);
+
+  mdEditBtn.addEventListener('click', () => {
+    if (state.currentFolderId) enterEditMode(state.currentFolderId);
+  });
+  mdRefreshBtn.addEventListener('click', () => {
+    if (state.currentFolderId) handleMetadataRefresh(state.currentFolderId);
+  });
+  mdRelinkBtn.addEventListener('click', openMetadataSearchModal);
+  mdResetBtn.addEventListener('click', () => {
+    if (state.currentFolderId) handleMetadataReset(state.currentFolderId);
+  });
+  mdUnlinkBtn.addEventListener('click', () => {
+    if (state.currentFolderId) handleMetadataUnlink(state.currentFolderId);
+  });
 
   mdSearchBtn.addEventListener('click', performMetadataSearch);
   mdSearchInput.addEventListener('keydown', e => {
