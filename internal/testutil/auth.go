@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/vrsandeep/mango-go/internal/api"
 	"github.com/vrsandeep/mango-go/internal/auth"
 )
@@ -16,7 +18,7 @@ func GetAuthCookie(t *testing.T, s *api.Server, username, password, role string)
 	t.Helper()
 
 	// Step 1: CORRECTLY hash the password before creating the user.
-	passwordHash, err := auth.HashPassword(password)
+	passwordHash, err := auth.HashPasswordWithCost(password, bcrypt.MinCost)
 	if err != nil {
 		t.Fatalf("Failed to hash password for test user: %v", err)
 	}

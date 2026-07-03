@@ -2,10 +2,14 @@ package auth
 
 import "golang.org/x/crypto/bcrypt"
 
-// HashPassword generates a bcrypt hash of the password.
-// The cost parameter (14) is a good balance between security and performance.
+const defaultHashCost = 14
+
 func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return HashPasswordWithCost(password, defaultHashCost)
+}
+
+func HashPasswordWithCost(password string, cost int) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	return string(bytes), err
 }
 
