@@ -196,7 +196,7 @@
 /* Page Header */
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 1rem;
   flex-wrap: wrap;
@@ -576,6 +576,52 @@
   }
 }
 
+/* ─── Edit Mode Layout Overrides ─── */
+
+body.md-editing .header-actions {
+  display: none;
+}
+
+body.md-editing #folder-tags-section {
+  display: none !important;
+}
+
+body.md-editing .page-header {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+body.md-editing .page-header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+body.md-editing .page-header-hero {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+body.md-editing #page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+body.md-editing #page-title .md-edit-title {
+  flex: 1;
+  min-width: 0;
+}
+
+body.md-editing #metadata-panel {
+  margin-top: 0;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .library-controls {
@@ -595,6 +641,15 @@
   .page-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  body.md-editing .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.md-editing .cover-container {
+    align-self: center;
   }
 
   .breadcrumb {
@@ -630,10 +685,8 @@
     padding-top: 8rem;
   }
 
-  /* Header actions: wrap and align left on mobile */
   .header-actions {
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    align-items: flex-start;
     width: 100%;
   }
 
@@ -746,11 +799,12 @@
   color: white;
 }
 
-/* Header actions wrapper (rating + edit button) */
+/* Header actions wrapper (ratings stacked + icon toolbar below) */
 .header-actions {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
 }
 
 /* Rating widget */
@@ -827,32 +881,8 @@
 
 .inline-tags {
   display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  gap: 0.4rem;
-  padding-bottom: 4px; /* room for scrollbar */
-  min-width: 0; /* allow overflow-x to kick in inside flex parent */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) transparent;
-}
-
-.inline-tags::-webkit-scrollbar {
-  height: 4px;
-}
-
-.inline-tags::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.inline-tags::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 2px;
-}
-
-.inline-tags.expanded {
   flex-wrap: wrap;
-  overflow-x: visible;
-  padding-bottom: 0;
+  gap: 0.4rem;
 }
 
 /* Tags in the inline row: theme-aware colors, don't shrink */

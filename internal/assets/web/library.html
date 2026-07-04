@@ -54,12 +54,13 @@
                     <h1 id="page-title">Library</h1>
                     <span class="md-status-badge" id="md-status-badge" style="display: none;"></span>
                 </div>
-                <div class="md-header-actions" id="md-header-actions" style="display: none;">
-                    <button class="md-icon-btn" id="md-edit-btn" title="Edit metadata"><i class="ph-bold ph-pencil-simple"></i></button>
-                    <button class="md-icon-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i></button>
-                    <button class="md-icon-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i></button>
-                    <button class="md-icon-btn md-icon-danger" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i></button>
-                    <button class="md-icon-btn md-icon-danger" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i></button>
+                <div id="md-alt-titles-header" style="display: none;"></div>
+                <div class="folder-tags-section" id="folder-tags-section" style="display: none;">
+                    <div class="inline-tags" id="tags-container"></div>
+                    <div class="inline-tag-input-wrap" id="inline-tag-input-wrap">
+                        <input type="text" id="tag-input" class="inline-tag-input" placeholder="+ Add tag…" autocomplete="off" title="Type a tag name and press Enter to save">
+                        <div class="autocomplete-suggestions" id="autocomplete-suggestions"></div>
+                    </div>
                 </div>
             </div>
             <div class="header-actions">
@@ -72,15 +73,13 @@
                     <span class="cs-label">Community:</span>
                     <span class="cs-value" id="cs-value"></span>
                 </div>
-            </div>
-        </div>
-
-        <!-- Inline tags — shown only when viewing a specific folder -->
-        <div class="folder-tags-section" id="folder-tags-section" style="display: none;">
-            <div class="inline-tags" id="tags-container"></div>
-            <div class="inline-tag-input-wrap" id="inline-tag-input-wrap">
-                <input type="text" id="tag-input" class="inline-tag-input" placeholder="+ Add tag…" autocomplete="off" title="Type a tag name and press Enter to save">
-                <div class="autocomplete-suggestions" id="autocomplete-suggestions"></div>
+                <div class="md-header-actions" id="md-header-actions" style="display: none;">
+                    <button class="md-icon-btn" id="md-edit-btn" title="Edit metadata"><i class="ph-bold ph-pencil-simple"></i></button>
+                    <button class="md-icon-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i></button>
+                    <button class="md-icon-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i></button>
+                    <button class="md-icon-btn md-icon-danger" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i></button>
+                    <button class="md-icon-btn md-icon-danger" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i></button>
+                </div>
             </div>
         </div>
 

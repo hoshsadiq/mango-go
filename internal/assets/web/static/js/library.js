@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const metadataPanel = document.getElementById('metadata-panel');
   const noMetadataPrompt = document.getElementById('no-metadata-prompt');
   const mdStatusBadge = document.getElementById('md-status-badge');
+  const mdAltTitlesHeader = document.getElementById('md-alt-titles-header');
   const mdHeaderActions = document.getElementById('md-header-actions');
   const communityScoreWidget = document.getElementById('community-score-widget');
   const csValue = document.getElementById('cs-value');
@@ -352,59 +353,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     return html;
   };
 
-  // --- Alt titles edit helpers ---
-  const TITLE_TYPES = ['ROMAJI', 'LOCALIZED', 'NATIVE'];
-
-  const renderAltTitleRow = (title, idx) => {
-    let html = `<div class="md-title-edit-row" data-idx="${idx}">`;
-    html += `<input type="text" class="md-edit-input md-title-text-input" value="${escapeHtml(title.title)}" placeholder="Title">`;
-    html += `<select class="md-edit-select md-title-type-select">`;
-    TITLE_TYPES.forEach(t => {
-      html += `<option value="${t}"${t === title.type ? ' selected' : ''}>${t}</option>`;
-    });
-    html += `</select>`;
-    html += `<input type="text" class="md-edit-input md-title-lang-input" value="${escapeHtml(title.language || '')}" placeholder="Language">`;
-    html += `<button class="md-row-remove" type="button" title="Remove">&times;</button>`;
-    html += '</div>';
-    return html;
-  };
-
   const buildMetadataPanelHtml = (md, locks, provider, editMode) => {
     let html = '';
 
     if (editMode) {
-      html += '<div class="md-header">';
-      html += '<span class="md-actions-spacer"></span>';
-      html += `<button class="md-action-btn md-save-btn md-save-btn-top" title="Edited fields are automatically locked to prevent provider overwrite"><i class="ph-bold ph-floppy-disk"></i> Save</button>`;
-      html += `<button class="md-action-btn md-cancel-btn-top"><i class="ph-bold ph-x"></i> Cancel</button>`;
-      html += '</div>';
       html +=
-        '<div class="md-edit-save-note"><i class="ph-bold ph-info"></i> Edited fields are automatically locked to prevent provider overwrite.</div>';
-      html +=
-        '<div class="md-edit-save-note md-edit-collection-warning"><i class="ph-bold ph-warning"></i> Collection fields (titles, authors, links) are read-only — editing is not yet supported by the API.</div>';
-    }
-
-    if (editMode) {
-      html += `<div class="md-section-label">Alternative Titles${lockIconHtml(locks.titles, 'titles_lock')}</div>`;
-      html += '<div class="md-edit-collection" id="md-edit-titles">';
-      (md.titles || []).forEach((t, i) => {
-        html += renderAltTitleRow(t, i);
-      });
-      html += `<button class="md-add-row-btn" id="md-add-title-btn" type="button"><i class="ph-bold ph-plus"></i> Add Title</button>`;
-      html += '</div>';
-    } else if (md.titles && md.titles.length > 0) {
-      html += '<div class="md-alt-titles">';
-      html += `<button class="md-alt-titles-toggle" data-expanded="false">`;
-      html += `<i class="ph-bold ph-caret-right"></i> ${md.titles.length} Alternative Title${md.titles.length > 1 ? 's' : ''}${lockIconHtml(locks.titles, 'titles_lock')}`;
-      html += `</button>`;
-      html += '<ul class="md-alt-titles-list">';
-      md.titles.forEach(t => {
-        const lang = t.language
-          ? ` <span class="md-title-lang">(${escapeHtml(t.language)})</span>`
-          : '';
-        html += `<li>${escapeHtml(t.title)}${lang}</li>`;
-      });
-      html += '</ul></div>';
+        '<div class="md-edit-save-note"><i class="ph-bold ph-info"></i> Edited fields are auto-locked to prevent provider overwrite. Collection fields (titles, authors, links) are read-only.</div>';
     }
 
     if (editMode || (md.summary && md.summary.trim())) {
@@ -547,11 +501,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     attachLockListeners(folderId);
 
     if (editMode) {
-      metadataPanel.querySelectorAll('.md-save-btn-top, .md-save-btn-bottom').forEach(btn => {
+      metadataPanel.querySelectorAll('.md-save-btn-bottom').forEach(btn => {
         btn.addEventListener('click', () => handleMetadataSave(folderId));
       });
 
-      metadataPanel.querySelectorAll('.md-cancel-btn-top, .md-cancel-btn-bottom').forEach(btn => {
+      metadataPanel.querySelectorAll('.md-cancel-btn-bottom').forEach(btn => {
         btn.addEventListener('click', handleMetadataCancel);
       });
 
@@ -583,20 +537,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
-      // Add alt title row
-      const addTitleBtn = metadataPanel.querySelector('#md-add-title-btn');
-      if (addTitleBtn) {
-        addTitleBtn.addEventListener('click', () => {
-          const container = metadataPanel.querySelector('#md-edit-titles');
-          const rows = container.querySelectorAll('.md-title-edit-row');
-          const idx = rows.length;
-          const newRowHtml = renderAltTitleRow({ title: '', type: 'ROMAJI', language: '' }, idx);
-          addTitleBtn.insertAdjacentHTML('beforebegin', newRowHtml);
-          const newRow = container.querySelectorAll('.md-title-edit-row')[idx];
-          newRow.querySelector('.md-row-remove').addEventListener('click', () => newRow.remove());
-        });
-      }
-
       // Remove row buttons for existing rows
       metadataPanel.querySelectorAll('.md-row-remove').forEach(btn => {
         btn.addEventListener('click', () => btn.closest('[data-idx]').remove());
@@ -615,18 +555,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       });
     } else {
-      const altTitlesToggle = metadataPanel.querySelector('.md-alt-titles-toggle');
-      if (altTitlesToggle) {
-        altTitlesToggle.addEventListener('click', () => {
-          const list = metadataPanel.querySelector('.md-alt-titles-list');
-          const expanded = altTitlesToggle.dataset.expanded === 'true';
-          altTitlesToggle.dataset.expanded = String(!expanded);
-          list.classList.toggle('expanded', !expanded);
-          const icon = altTitlesToggle.querySelector('i');
-          icon.className = !expanded ? 'ph-bold ph-caret-down' : 'ph-bold ph-caret-right';
-        });
-      }
-
       const summaryToggle = metadataPanel.querySelector('.md-summary-toggle');
       if (summaryToggle) {
         const summaryText = metadataPanel.querySelector('.md-summary-text');
@@ -648,6 +576,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const enterEditMode = folderId => {
     if (!mdOriginalMetadata) return;
     mdEditMode = true;
+    document.body.classList.add('md-editing');
     mdHeaderActions.style.display = 'none';
     communityScoreWidget.style.display = 'none';
     const md = mdOriginalMetadata;
@@ -675,6 +604,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const handleMetadataCancel = () => {
     mdEditMode = false;
+    document.body.classList.remove('md-editing');
     if (!mdOriginalMetadata || !state.currentFolderId) return;
     const md = mdOriginalMetadata;
     const locks = md.locks || {};
@@ -756,11 +686,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (Object.keys(body).length === 0) {
       toast.success('No changes to save');
       mdEditMode = false;
+      document.body.classList.remove('md-editing');
       fetchAndRenderMetadataPanel(folderId);
       return;
     }
 
-    const saveBtns = metadataPanel.querySelectorAll('.md-save-btn-top, .md-save-btn-bottom');
+    const saveBtns = metadataPanel.querySelectorAll('.md-save-btn-bottom');
     saveBtns.forEach(btn => {
       btn.disabled = true;
       btn.innerHTML =
@@ -781,6 +712,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       toast.success('Metadata saved');
       mdEditMode = false;
+      document.body.classList.remove('md-editing');
       fetchAndRenderMetadataPanel(folderId);
     } catch (err) {
       toast.error(err.message);
@@ -836,6 +768,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         : 'Unlocked: this field will be updated on refresh';
       coverContainer.appendChild(lockEl);
     }
+
+    if (md.titles && md.titles.length > 0) {
+      let altHtml = '<div class="md-alt-titles">';
+      altHtml += `<button class="md-alt-titles-toggle" data-expanded="false">`;
+      altHtml += `<i class="ph-bold ph-caret-right"></i> ${md.titles.length} Alternative Title${md.titles.length > 1 ? 's' : ''}${lockIconHtml(locks.titles, 'titles_lock')}`;
+      altHtml += `</button>`;
+      altHtml += '<ul class="md-alt-titles-list">';
+      md.titles.forEach(t => {
+        const lang = t.language
+          ? ` <span class="md-title-lang">(${escapeHtml(t.language)})</span>`
+          : '';
+        altHtml += `<li>${escapeHtml(t.title)}${lang}</li>`;
+      });
+      altHtml += '</ul></div>';
+      mdAltTitlesHeader.innerHTML = altHtml;
+      mdAltTitlesHeader.style.display = 'block';
+
+      const toggle = mdAltTitlesHeader.querySelector('.md-alt-titles-toggle');
+      if (toggle) {
+        toggle.addEventListener('click', () => {
+          const list = mdAltTitlesHeader.querySelector('.md-alt-titles-list');
+          const expanded = toggle.dataset.expanded === 'true';
+          toggle.dataset.expanded = String(!expanded);
+          list.classList.toggle('expanded', !expanded);
+          const icon = toggle.querySelector('i');
+          icon.className = !expanded ? 'ph-bold ph-caret-down' : 'ph-bold ph-caret-right';
+        });
+      }
+    } else {
+      mdAltTitlesHeader.innerHTML = '';
+      mdAltTitlesHeader.style.display = 'none';
+    }
   };
 
   const removeCoverLock = () => {
@@ -848,6 +812,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     mdStatusBadge.style.display = 'none';
     communityScoreWidget.style.display = 'none';
     mdHeaderActions.style.display = 'none';
+    mdAltTitlesHeader.innerHTML = '';
+    mdAltTitlesHeader.style.display = 'none';
     document.querySelectorAll('.anilist-header-btn').forEach(el => el.remove());
     if (folderThumb.dataset.originalSrc) {
       folderThumb.src = folderThumb.dataset.originalSrc;
@@ -909,6 +875,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         mdOriginalMetadata = null;
         mdOriginalProvider = null;
         mdEditMode = false;
+        document.body.classList.remove('md-editing');
         return;
       }
 
@@ -924,6 +891,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       mdOriginalMetadata = md;
       mdOriginalProvider = provider;
       mdEditMode = false;
+      document.body.classList.remove('md-editing');
 
       noMetadataPrompt.style.display = 'none';
 
