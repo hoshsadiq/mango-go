@@ -11,6 +11,7 @@ import (
 	"github.com/vrsandeep/mango-go/internal/db"
 	"github.com/vrsandeep/mango-go/internal/jobs"
 	"github.com/vrsandeep/mango-go/internal/library"
+	"github.com/vrsandeep/mango-go/internal/store"
 	"github.com/vrsandeep/mango-go/internal/websocket"
 )
 
@@ -19,13 +20,14 @@ const Version = "0.1.7" // Application version
 // App holds the core components of the application that are shared
 // between the server and the CLI.
 type App struct {
-	config       *config.Config
-	dB           *sql.DB
-	wsHub        *websocket.Hub
-	Version      string
-	WebFS        embed.FS
-	MigrationsFS embed.FS
-	jobManager   *jobs.JobManager
+	config               *config.Config
+	dB                   *sql.DB
+	wsHub                *websocket.Hub
+	Version              string
+	WebFS                embed.FS
+	MigrationsFS         embed.FS
+	jobManager           *jobs.JobManager
+	ChapterMetadataStore *store.ChapterMetadataStore
 }
 
 func (a *App) DB() *sql.DB                               { return a.dB }
@@ -67,10 +69,11 @@ func New() (*App, error) {
 	go hub.Run()
 
 	app := &App{
-		config:  cfg,
-		dB:      database,
-		wsHub:   hub,
-		Version: Version,
+		config:               cfg,
+		dB:                   database,
+		wsHub:                hub,
+		Version:              Version,
+		ChapterMetadataStore: store.NewChapterMetadataStore(database),
 	}
 
 	jobManager := jobs.NewManager(app)
@@ -79,6 +82,7 @@ func New() (*App, error) {
 	app.jobManager.Register("regen-thumbnails", "Regenerate Thumbnails", library.RegenerateThumbnails)
 	app.jobManager.Register("delete-empty-tags", "Delete Empty Tags", library.DeleteEmptyTags)
 	app.jobManager.Register("detect-bad-files", "Detect Bad Chapter Files", library.DetectBadFiles)
+	app.jobManager.Register("parse-chapter-metadata", "Parse Chapter Metadata", library.ParseChapterMetadata)
 	return app, nil
 }
 

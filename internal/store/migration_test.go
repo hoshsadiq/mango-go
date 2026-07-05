@@ -145,8 +145,8 @@ func TestMetadataMigrationDown(t *testing.T) {
 		t.Fatal("series_metadata table not created")
 	}
 
-	// Step down past 000011 (folder_tags_source) and 000010 (metadata tables)
-	if err := m.Steps(-2); err != nil {
+	// Step down past 000012 (chapter_metadata), 000011 (folder_tags_source), and 000010 (metadata tables)
+	if err := m.Steps(-3); err != nil {
 		t.Fatalf("Failed to step down migration: %v", err)
 	}
 
