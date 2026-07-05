@@ -123,6 +123,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/folders/{folderID}/metadata/unlink", s.handleUnlinkMetadata)
 			r.Patch("/folders/{folderID}/metadata", s.handleEditMetadata)
 			r.Patch("/folders/{folderID}/metadata/locks", s.handleEditLocks)
+			r.Patch("/folders/{folderID}/chapters/metadata/bulk", s.handleBulkUpdateChapterMetadata)
 			r.Get("/folders/{folderID}/chapters/{chapterID}/neighbors", s.handleGetChapterNeighbors)
 
 			// Metadata Search
@@ -131,6 +132,10 @@ func (s *Server) Router() http.Handler {
 			r.Get("/chapters/{chapterID}", s.handleGetChapterDetails)
 			r.Post("/chapters/{chapterID}/progress", s.handleUpdateProgress)
 			r.Get("/chapters/{chapterID}/pages/{pageNumber}", s.handleGetPage)
+			r.Get("/chapters/{chapterID}/metadata", s.handleGetChapterMetadata)
+			r.Patch("/chapters/{chapterID}/metadata", s.handleEditChapterMetadata)
+			r.Get("/chapters/{chapterID}/metadata/locks", s.handleGetChapterMetadataLocks)
+			r.Patch("/chapters/{chapterID}/metadata/locks", s.handleEditChapterMetadataLocks)
 
 			// Folder Tagging Routes
 			r.Post("/folders/{folderID}/tags", s.handleAddTagToFolder)
