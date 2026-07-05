@@ -10,6 +10,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/vrsandeep/mango-go/internal/library"
+	"github.com/vrsandeep/mango-go/internal/metadata"
 	"github.com/vrsandeep/mango-go/internal/models"
 	"github.com/vrsandeep/mango-go/internal/store"
 	"github.com/vrsandeep/mango-go/internal/testutil"
@@ -478,4 +479,224 @@ func TestMetadataBasedSkipping(t *testing.T) {
 	// Note: On some filesystems, modifying file content might be needed
 	// For this test, we'll just verify the mechanism works
 	// In a real scenario, changing the file would trigger re-parsing
+}
+
+func TestChapterMetadataFromComicInfo(t *testing.T) {
+	app := testutil.SetupTestApp(t)
+	st := store.New(app.DB())
+	cms := store.NewChapterMetadataStore(app.DB())
+	libraryRoot := app.Config().Library.Path
+
+	seriesDir := filepath.Join(libraryRoot, "Metadata Series")
+	os.MkdirAll(seriesDir, 0755)
+
+	comicInfoXML := `<?xml version="1.0" encoding="utf-8"?>
+<ComicInfo>
+  <Title>The Great Battle</Title>
+  <Number>5</Number>
+  <Volume>2</Volume>
+  <Summary>An epic chapter</Summary>
+  <Writer>John Doe</Writer>
+  <LanguageISO>en</LanguageISO>
+  <Genre>Action, Adventure</Genre>
+  <Year>2024</Year>
+  <Month>3</Month>
+  <Day>15</Day>
+</ComicInfo>`
+
+	testutil.CreateTestCBZWithComicInfo(t, seriesDir, "Ch.042 - Fallback Title.cbz", []string{"p1.jpg"}, comicInfoXML)
+
+	library.LibrarySync(app)
+
+	assertChapterCount(t, st, 1, "After scan with ComicInfo")
+
+	chapters, _ := st.GetAllChaptersByHash()
+	var chapterID int64
+	for _, info := range chapters {
+		chapterID = info.ID
+		break
+	}
+
+	meta, err := cms.GetChapterMetadata(chapterID)
+	if err != nil {
+		t.Fatalf("Failed to get chapter metadata: %v", err)
+	}
+	if meta == nil {
+		t.Fatal("Expected chapter metadata to exist")
+	}
+
+	// ComicInfo Title overrides filename-parsed title
+	if meta.Title == nil || *meta.Title != "The Great Battle" {
+		t.Errorf("Expected title 'The Great Battle', got %v", meta.Title)
+	}
+	// ComicInfo Number overrides filename-parsed number
+	if meta.Number == nil || *meta.Number != "5" {
+		t.Errorf("Expected number '5', got %v", meta.Number)
+	}
+	// ComicInfo Volume overrides filename-parsed volume (filename has none)
+	if meta.Volume == nil || *meta.Volume != "2" {
+		t.Errorf("Expected volume '2', got %v", meta.Volume)
+	}
+	// SortNumber comes from filename parsing (ComicInfo doesn't produce it)
+	if meta.SortNumber == nil || *meta.SortNumber != 42.0 {
+		t.Errorf("Expected sort_number 42.0 from filename, got %v", meta.SortNumber)
+	}
+	if meta.Summary == nil || *meta.Summary != "An epic chapter" {
+		t.Errorf("Expected summary 'An epic chapter', got %v", meta.Summary)
+	}
+	if meta.Language == nil || *meta.Language != "en" {
+		t.Errorf("Expected language 'en', got %v", meta.Language)
+	}
+	if meta.ReleaseDate == nil || *meta.ReleaseDate != "2024-03-15" {
+		t.Errorf("Expected release_date '2024-03-15', got %v", meta.ReleaseDate)
+	}
+	if len(meta.Authors) != 1 || meta.Authors[0].Name != "John Doe" {
+		t.Errorf("Expected 1 author 'John Doe', got %v", meta.Authors)
+	}
+	if len(meta.Genres) != 2 {
+		t.Errorf("Expected 2 genres, got %d", len(meta.Genres))
+	}
+}
+
+func TestChapterMetadataFromFilenameOnly(t *testing.T) {
+	app := testutil.SetupTestApp(t)
+	st := store.New(app.DB())
+	cms := store.NewChapterMetadataStore(app.DB())
+	libraryRoot := app.Config().Library.Path
+
+	seriesDir := filepath.Join(libraryRoot, "Filename Series")
+	os.MkdirAll(seriesDir, 0755)
+
+	// No ComicInfo.xml — metadata comes from filename only
+	testutil.CreateTestCBZ(t, seriesDir, "Ch.007 - The Escape.cbz", []string{"p1.jpg"})
+
+	library.LibrarySync(app)
+
+	assertChapterCount(t, st, 1, "After scan without ComicInfo")
+
+	chapters, _ := st.GetAllChaptersByHash()
+	var chapterID int64
+	for _, info := range chapters {
+		chapterID = info.ID
+		break
+	}
+
+	meta, err := cms.GetChapterMetadata(chapterID)
+	if err != nil {
+		t.Fatalf("Failed to get chapter metadata: %v", err)
+	}
+	if meta == nil {
+		t.Fatal("Expected chapter metadata to exist from filename parsing")
+	}
+
+	if meta.Number == nil || *meta.Number != "007" {
+		t.Errorf("Expected number '007' from filename, got %v", meta.Number)
+	}
+	if meta.SortNumber == nil || *meta.SortNumber != 7.0 {
+		t.Errorf("Expected sort_number 7.0, got %v", meta.SortNumber)
+	}
+	if meta.Title == nil || *meta.Title != "The Escape" {
+		t.Errorf("Expected title 'The Escape' from filename, got %v", meta.Title)
+	}
+	// No ComicInfo → these should be nil
+	if meta.Summary != nil {
+		t.Errorf("Expected nil summary without ComicInfo, got %v", meta.Summary)
+	}
+	if meta.Language != nil {
+		t.Errorf("Expected nil language without ComicInfo, got %v", meta.Language)
+	}
+}
+
+func TestChapterMetadataSkippedOnUnchangedFile(t *testing.T) {
+	app := testutil.SetupTestApp(t)
+	st := store.New(app.DB())
+	cms := store.NewChapterMetadataStore(app.DB())
+	libraryRoot := app.Config().Library.Path
+
+	seriesDir := filepath.Join(libraryRoot, "Skip Meta Series")
+	os.MkdirAll(seriesDir, 0755)
+	testutil.CreateTestCBZ(t, seriesDir, "Ch.001.cbz", []string{"p1.jpg"})
+
+	library.LibrarySync(app)
+	assertChapterCount(t, st, 1, "After first scan")
+
+	chapters, _ := st.GetAllChaptersByHash()
+	var chapterID int64
+	for _, info := range chapters {
+		chapterID = info.ID
+		break
+	}
+
+	meta1, err := cms.GetChapterMetadata(chapterID)
+	if err != nil {
+		t.Fatalf("Failed to get metadata after first scan: %v", err)
+	}
+	if meta1 == nil {
+		t.Fatal("Expected metadata after first scan")
+	}
+	updatedAt1 := meta1.UpdatedAt
+
+	// Lock the title so we can detect if upsert runs again
+	err = cms.UpdateChapterMetadataLocks(chapterID, &metadata.ChapterMetadataLocks{TitleLock: true})
+	if err != nil {
+		t.Fatalf("Failed to lock title: %v", err)
+	}
+
+	// Second scan — file unchanged, should skip metadata extraction entirely
+	library.LibrarySync(app)
+
+	meta2, err := cms.GetChapterMetadata(chapterID)
+	if err != nil {
+		t.Fatalf("Failed to get metadata after second scan: %v", err)
+	}
+	if meta2 == nil {
+		t.Fatal("Expected metadata after second scan")
+	}
+
+	// UpdatedAt should not change because the mtime skip prevents re-extraction
+	if !meta2.UpdatedAt.Equal(updatedAt1) {
+		t.Errorf("Metadata should not be re-extracted for unchanged file: updatedAt changed from %v to %v", updatedAt1, meta2.UpdatedAt)
+	}
+}
+
+func TestChapterMetadataComicInfoFailureNonBlocking(t *testing.T) {
+	app := testutil.SetupTestApp(t)
+	st := store.New(app.DB())
+	cms := store.NewChapterMetadataStore(app.DB())
+	libraryRoot := app.Config().Library.Path
+
+	seriesDir := filepath.Join(libraryRoot, "Bad ComicInfo Series")
+	os.MkdirAll(seriesDir, 0755)
+
+	// Create a CBZ with invalid ComicInfo.xml (malformed XML)
+	badComicInfoXML := `<?xml version="1.0"?><ComicInfo><Title>Broken`
+	testutil.CreateTestCBZWithComicInfo(t, seriesDir, "Ch.010 - Still Works.cbz", []string{"p1.jpg"}, badComicInfoXML)
+
+	library.LibrarySync(app)
+
+	// Chapter should still be created despite ComicInfo parse failure
+	assertChapterCount(t, st, 1, "Chapter should exist despite bad ComicInfo")
+
+	chapters, _ := st.GetAllChaptersByHash()
+	var chapterID int64
+	for _, info := range chapters {
+		chapterID = info.ID
+		break
+	}
+
+	meta, err := cms.GetChapterMetadata(chapterID)
+	if err != nil {
+		t.Fatalf("Failed to get chapter metadata: %v", err)
+	}
+	if meta == nil {
+		t.Fatal("Expected metadata from filename parsing even with bad ComicInfo")
+	}
+
+	// Filename-parsed fields should still be populated
+	if meta.Number == nil || *meta.Number != "010" {
+		t.Errorf("Expected number '010' from filename, got %v", meta.Number)
+	}
+	if meta.Title == nil || *meta.Title != "Still Works" {
+		t.Errorf("Expected title 'Still Works' from filename, got %v", meta.Title)
+	}
 }

@@ -19,6 +19,9 @@ import (
 	"github.com/vrsandeep/mango-go/internal/config"
 	"github.com/vrsandeep/mango-go/internal/jobs"
 	"github.com/vrsandeep/mango-go/internal/library/chapterfiles"
+	"github.com/vrsandeep/mango-go/internal/library/chapterparse"
+	"github.com/vrsandeep/mango-go/internal/library/comicinfo"
+	"github.com/vrsandeep/mango-go/internal/metadata"
 	"github.com/vrsandeep/mango-go/internal/models"
 	"github.com/vrsandeep/mango-go/internal/store"
 )
@@ -185,7 +188,8 @@ func performSync(ctx jobs.JobContext, jobId string, diskItems map[string]diskIte
 
 	// 3. Reconcile Chapters
 	sendProgress(ctx, jobId, "Syncing chapters...", 50, false)
-	parsingErrors := syncChapters(st, diskItems, dbChapters, dbChaptersByPath, dbFolders)
+	chapterMetadataStore := store.NewChapterMetadataStore(ctx.DB())
+	parsingErrors := syncChapters(st, chapterMetadataStore, diskItems, dbChapters, dbChaptersByPath, dbFolders)
 
 	// 4. Check for bad files during sync
 	sendProgress(ctx, jobId, "Checking for bad files...", 65, false)
@@ -248,7 +252,7 @@ func syncFolders(st *store.Store, rootPath string, diskItems map[string]diskItem
 
 // syncChapters handles new, moved, and existing chapters.
 // It uses file metadata (mtime, size) to skip parsing unchanged files.
-func syncChapters(st *store.Store, diskItems map[string]diskItem, dbChapters map[string]store.ChapterInfo, dbChaptersByPath map[string]store.ChapterInfo, dbFolders map[string]*models.Folder) map[string]error {
+func syncChapters(st *store.Store, cms *store.ChapterMetadataStore, diskItems map[string]diskItem, dbChapters map[string]store.ChapterInfo, dbChaptersByPath map[string]store.ChapterInfo, dbFolders map[string]*models.Folder) map[string]error {
 
 	// Track parsing errors to avoid re-parsing in checkBadFilesDuringSync
 	parsingErrors := make(map[string]error)
@@ -276,7 +280,7 @@ func syncChapters(st *store.Store, diskItems map[string]diskItem, dbChapters map
 			// File exists at this path - check if metadata changed
 			if existingChapterByPath.FileMtime != nil && existingChapterByPath.FileSize != nil {
 				if fileMtime.Equal(*existingChapterByPath.FileMtime) && fileSize == *existingChapterByPath.FileSize {
-					// File metadata unchanged - skip parsing
+					// File metadata unchanged - skip parsing and metadata extraction
 					skippedCount++
 					continue
 				}
@@ -311,6 +315,7 @@ func syncChapters(st *store.Store, diskItems map[string]diskItem, dbChapters map
 					st.UpdateChapterPathWithMetadata(existingChapter.ID, path, parentFolder.ID, &fileMtime, &fileSize)
 				}
 			}
+			extractAndPersistChapterMetadata(cms, existingChapter.ID, path)
 		} else {
 			// New chapter - create with metadata
 			parentFolder, ok := dbFolders[filepath.Dir(path)]
@@ -319,7 +324,12 @@ func syncChapters(st *store.Store, diskItems map[string]diskItem, dbChapters map
 				if firstPageData != nil {
 					thumb, _ = GenerateThumbnail(firstPageData)
 				}
-				st.CreateChapterWithMetadata(parentFolder.ID, path, hash, len(pages), thumb, &fileMtime, &fileSize)
+				chapter, createErr := st.CreateChapterWithMetadata(parentFolder.ID, path, hash, len(pages), thumb, &fileMtime, &fileSize)
+				if createErr != nil {
+					log.Printf("Error creating chapter %s: %v", path, createErr)
+				} else if chapter != nil {
+					extractAndPersistChapterMetadata(cms, chapter.ID, path)
+				}
 			}
 		}
 	}
@@ -330,6 +340,72 @@ func syncChapters(st *store.Store, diskItems map[string]diskItem, dbChapters map
 	log.Printf("Parsed %d files during sync", parsedCount)
 
 	return parsingErrors
+}
+
+// extractAndPersistChapterMetadata extracts metadata from ComicInfo.xml and filename,
+// merges them (ComicInfo priority), and persists. Failures log warnings, never block.
+func extractAndPersistChapterMetadata(cms *store.ChapterMetadataStore, chapterID int64, chapterPath string) {
+	filenameWithoutExt := strings.TrimSuffix(filepath.Base(chapterPath), filepath.Ext(chapterPath))
+	parsed := chapterparse.ParseFilename(filenameWithoutExt)
+
+	// TODO(optimization): opens archive a second time; InspectChapterFile already opened it.
+	// Acceptable for v1; optimize by extracting ComicInfo during InspectChapterFile.
+	ci, err := comicinfo.ExtractFromArchive(chapterPath)
+	if err != nil {
+		log.Printf("Warning: failed to extract ComicInfo from %s: %v (continuing with filename only)", chapterPath, err)
+	}
+
+	meta := &metadata.ChapterMetadata{}
+
+	// Filename-parsed fields (lower priority)
+	if parsed.Number != nil {
+		meta.Number = parsed.Number
+	}
+	if parsed.SortNumber != nil {
+		meta.SortNumber = parsed.SortNumber
+	}
+	if parsed.Title != nil {
+		meta.Title = parsed.Title
+	}
+	if parsed.Volume != nil {
+		meta.Volume = parsed.Volume
+	}
+
+	// ComicInfo fields overlay filename-parsed (higher priority for Title/Number/Volume)
+	if ci != nil {
+		ciMeta := comicinfo.MapToChapterMetadata(ci)
+
+		if ciMeta.Title != nil {
+			meta.Title = ciMeta.Title
+		}
+		if ciMeta.Number != nil {
+			meta.Number = ciMeta.Number
+		}
+		if ciMeta.Volume != nil {
+			meta.Volume = ciMeta.Volume
+		}
+
+		meta.Summary = ciMeta.Summary
+		meta.Notes = ciMeta.Notes
+		meta.ReleaseDate = ciMeta.ReleaseDate
+		meta.Language = ciMeta.Language
+		meta.ChapterType = ciMeta.ChapterType
+		meta.AgeRating = ciMeta.AgeRating
+		meta.Web = ciMeta.Web
+		meta.Characters = ciMeta.Characters
+		meta.Teams = ciMeta.Teams
+		meta.Locations = ciMeta.Locations
+		meta.ScanlationGroup = ciMeta.ScanlationGroup
+		meta.StoryArc = ciMeta.StoryArc
+		meta.StoryArcNumber = ciMeta.StoryArcNumber
+		meta.Authors = ciMeta.Authors
+		meta.Genres = ciMeta.Genres
+		meta.Tags = ciMeta.Tags
+	}
+
+	if err := cms.UpsertChapterMetadata(chapterID, meta); err != nil {
+		log.Printf("Warning: failed to persist chapter metadata for chapter %d (%s): %v", chapterID, chapterPath, err)
+	}
 }
 
 // prune removes items from the DB that are no longer on disk or are corrupted.

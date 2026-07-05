@@ -55,3 +55,45 @@ func CreateTestCBZWithThumbnail(t *testing.T, dir, name string, pages []string, 
 	}
 	return filePath
 }
+
+// CreateTestCBZWithComicInfo creates a CBZ with pages and an embedded ComicInfo.xml.
+func CreateTestCBZWithComicInfo(t *testing.T, dir, name string, pages []string, comicInfoXML string) string {
+	t.Helper()
+
+	imageData, err := base64.StdEncoding.DecodeString(tinyPNG)
+	if err != nil {
+		t.Fatalf("Failed to decode image data: %v", err)
+	}
+
+	filePath := filepath.Join(dir, name)
+	file, err := os.Create(filePath)
+	if err != nil {
+		t.Fatalf("Failed to create temp cbz file: %v", err)
+	}
+	t.Cleanup(func() { file.Close() })
+
+	zipWriter := zip.NewWriter(file)
+	defer zipWriter.Close()
+
+	for _, page := range pages {
+		writer, err := zipWriter.Create(page)
+		if err != nil {
+			t.Fatalf("Failed to create entry '%s' in zip: %v", page, err)
+		}
+		_, err = writer.Write(imageData)
+		if err != nil {
+			t.Fatalf("Failed to write image data to zip entry: %v", err)
+		}
+	}
+
+	writer, err := zipWriter.Create("ComicInfo.xml")
+	if err != nil {
+		t.Fatalf("Failed to create ComicInfo.xml entry: %v", err)
+	}
+	_, err = writer.Write([]byte(comicInfoXML))
+	if err != nil {
+		t.Fatalf("Failed to write ComicInfo.xml: %v", err)
+	}
+
+	return filePath
+}
