@@ -701,17 +701,14 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		t.Fatal("got nil result")
 	}
 
-	// Status
 	if result.Status == nil || *result.Status != metadata.SeriesStatusCompleted {
 		t.Errorf("status: got %v, want COMPLETED", result.Status)
 	}
 
-	// Title
 	if result.Title == nil || *result.Title != "Naruto" {
 		t.Errorf("title: got %v, want Naruto", result.Title)
 	}
 
-	// Titles
 	if len(result.Titles) != 3 {
 		t.Fatalf("titles: got %d, want 3", len(result.Titles))
 	}
@@ -721,12 +718,10 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		t.Errorf("summary: got %v, want 'A ninja story'", result.Summary)
 	}
 
-	// Genres
 	if len(result.Genres) != 2 || result.Genres[0] != "Action" {
 		t.Errorf("genres: got %v", result.Genres)
 	}
 
-	// Tags
 	if len(result.Tags) != 1 || result.Tags[0] != "Shounen" {
 		t.Errorf("tags: got %v", result.Tags)
 	}
@@ -736,22 +731,18 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		t.Fatalf("authors: got %d, want 2", len(result.Authors))
 	}
 
-	// TotalBookCount
 	if result.TotalBookCount == nil || *result.TotalBookCount != 72 {
 		t.Errorf("totalBookCount: got %v, want 72", result.TotalBookCount)
 	}
 
-	// CommunityScore
 	if result.CommunityScore == nil || *result.CommunityScore != 8.4 {
 		t.Errorf("communityScore: got %v, want 8.4", result.CommunityScore)
 	}
 
-	// Date
 	assertIntPtr(t, result.ReleaseYear, 1999, "releaseYear")
 	assertIntPtr(t, result.ReleaseMonth, 9, "releaseMonth")
 	assertIntPtr(t, result.ReleaseDay, 21, "releaseDay")
 
-	// Language
 	if result.Language == nil || *result.Language != "ja" {
 		t.Errorf("language: got %v, want ja", result.Language)
 	}
@@ -769,7 +760,6 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		t.Error("last link should be AniList")
 	}
 
-	// Cover
 	if result.ThumbnailURL == nil || *result.ThumbnailURL != "https://img.anilist.co/naruto.jpg" {
 		t.Errorf("thumbnailURL: got %v", result.ThumbnailURL)
 	}

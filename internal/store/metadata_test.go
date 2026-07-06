@@ -163,19 +163,16 @@ func TestMetadataLockEnforcement(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "LockTest")
 
-	// Set initial title.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Title: ptrTo("Original Title"),
 	}); err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
 
-	// Lock the title field.
 	if err := s.UpdateMetadataLocks(folderID, map[string]bool{"title_lock": true}); err != nil {
 		t.Fatalf("UpdateMetadataLocks: %v", err)
 	}
 
-	// Try to update the locked title.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Title: ptrTo("New Title"),
 	}); err != nil {
@@ -200,19 +197,16 @@ func TestMetadataLockPreventsCollectionReplace(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "CollLockTest")
 
-	// Set initial genres.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Genres: []string{"Action", "Adventure"},
 	}); err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
 
-	// Lock genres.
 	if err := s.UpdateMetadataLocks(folderID, map[string]bool{"genres_lock": true}); err != nil {
 		t.Fatalf("UpdateMetadataLocks: %v", err)
 	}
 
-	// Try to replace genres while locked.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Genres: []string{"Romance"},
 	}); err != nil {
@@ -234,14 +228,12 @@ func TestMetadataEmptySliceClearsCollection(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "EmptySliceTest")
 
-	// Set genres.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Genres: []string{"Action", "Adventure"},
 	}); err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
 
-	// Clear genres with empty slice.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Genres: []string{},
 	}); err != nil {
@@ -285,12 +277,10 @@ func TestProviderLinkCRUD(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "PLCrud")
 
-	// Create
 	if err := s.UpsertProviderLink(folderID, "anilist", "12345"); err != nil {
 		t.Fatalf("UpsertProviderLink: %v", err)
 	}
 
-	// Read
 	link, err := s.GetProviderLink(folderID)
 	if err != nil {
 		t.Fatalf("GetProviderLink: %v", err)
@@ -311,7 +301,6 @@ func TestProviderLinkCRUD(t *testing.T) {
 		t.Errorf("provider_id should be updated: got %q", link.ProviderID)
 	}
 
-	// Delete
 	if err := s.DeleteProviderLink(folderID); err != nil {
 		t.Fatalf("DeleteProviderLink: %v", err)
 	}
@@ -375,7 +364,6 @@ func TestUpdateMetadataLocksRejectsUnknown(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "UnknownLock")
 
-	// Need a metadata row first.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Title: ptrTo("Test"),
 	}); err != nil {
@@ -393,7 +381,6 @@ func TestMetadataReset(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "ResetTest")
 
-	// Set up metadata + provider link + lock.
 	status := metadata.SeriesStatusCompleted
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Status:       &status,
@@ -414,7 +401,6 @@ func TestMetadataReset(t *testing.T) {
 		t.Fatalf("UpsertProviderLink: %v", err)
 	}
 
-	// Reset.
 	if err := s.ResetSeriesMetadata(folderID); err != nil {
 		t.Fatalf("ResetSeriesMetadata: %v", err)
 	}
@@ -467,7 +453,6 @@ func TestMetadataUnlink(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "UnlinkTest")
 
-	// Set up metadata + provider link.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Title:  ptrTo("One Piece"),
 		Genres: []string{"Action"},
@@ -478,7 +463,6 @@ func TestMetadataUnlink(t *testing.T) {
 		t.Fatalf("UpsertProviderLink: %v", err)
 	}
 
-	// Unlink.
 	if err := s.UnlinkSeriesMetadata(folderID); err != nil {
 		t.Fatalf("UnlinkSeriesMetadata: %v", err)
 	}
@@ -529,7 +513,6 @@ func TestMetadataReleaseDateLockCoversAllThreeFields(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "DateLock")
 
-	// Set all three date fields.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		ReleaseYear:  ptrTo(2000),
 		ReleaseMonth: ptrTo(1),
@@ -543,7 +526,6 @@ func TestMetadataReleaseDateLockCoversAllThreeFields(t *testing.T) {
 		t.Fatalf("UpdateMetadataLocks: %v", err)
 	}
 
-	// Try to update all three date fields.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		ReleaseYear:  ptrTo(2025),
 		ReleaseMonth: ptrTo(12),
@@ -573,7 +555,6 @@ func TestMetadataNilSliceKeepsExistingCollection(t *testing.T) {
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "NilSliceKeep")
 
-	// Set genres.
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Genres: []string{"Action", "Comedy"},
 	}); err != nil {
@@ -583,7 +564,7 @@ func TestMetadataNilSliceKeepsExistingCollection(t *testing.T) {
 	// Upsert with nil Genres (should keep existing).
 	if err := s.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{
 		Title: ptrTo("Updated Title"),
-		// Genres is nil — existing genres should be preserved
+		// Genres is nil, existing genres should be preserved
 	}); err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}

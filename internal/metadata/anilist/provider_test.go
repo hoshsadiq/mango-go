@@ -14,7 +14,6 @@ type mockAniListClient struct {
 	getMediaFullFn    func(ctx context.Context, id int) (*anilist.MediaFull, error)
 	searchMediaFullFn func(ctx context.Context, query string, limit int) ([]anilist.MediaFull, error)
 
-	// Track calls for assertion
 	searchCalls []struct {
 		query string
 		limit int

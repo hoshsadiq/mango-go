@@ -125,7 +125,6 @@ func TestSearchMediaFull_ParsesResults(t *testing.T) {
 	assertEqual(t, "SiteUrl", m.SiteUrl, "https://anilist.co/manga/30013")
 	assertEqual(t, "CoverImage.Large", m.CoverImage.Large, "https://img.anilist.co/large.jpg")
 
-	// Second result: check nullable fields
 	m2 := results[1]
 	assertIntPtr(t, "results[1].Volumes", m2.Volumes, 72)
 	if m2.StartDate.Day != nil {

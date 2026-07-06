@@ -123,13 +123,11 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 	}
 	defer tx.Rollback()
 
-	// Ensure a metadata row exists for this folder.
 	_, err = tx.Exec("INSERT OR IGNORE INTO series_metadata (folder_id) VALUES (?)", folderID)
 	if err != nil {
 		return err
 	}
 
-	// Read metadata ID and all lock states.
 	var metadataID int64
 	var statusLock, titleLock, summaryLock, publisherLock, rdLock bool
 	var ageLock, langLock, bookCountLock, scoreLock bool
@@ -152,7 +150,6 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 		return err
 	}
 
-	// Build dynamic UPDATE for non-nil, non-locked scalar fields.
 	var setClauses []string
 	var args []interface{}
 
@@ -276,7 +273,6 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 		}
 	}
 
-	// Always update timestamp.
 	if _, err = tx.Exec("UPDATE series_metadata SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", metadataID); err != nil {
 		return err
 	}
@@ -320,7 +316,6 @@ func (s *Store) GetSeriesMetadata(folderID int64) (*SeriesMetadataRow, error) {
 	row.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
 	row.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
 
-	// Initialize child slices and load data.
 	row.Genres = []string{}
 	row.Tags = []string{}
 	row.Authors = []metadata.Author{}
@@ -515,7 +510,6 @@ func (s *Store) UpdateMetadataField(folderID int64, field string, value interfac
 		return fmt.Errorf("unknown metadata field: %s", field)
 	}
 
-	// Ensure metadata row exists.
 	if _, err := s.db.Exec("INSERT OR IGNORE INTO series_metadata (folder_id) VALUES (?)", folderID); err != nil {
 		return err
 	}

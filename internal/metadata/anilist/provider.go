@@ -87,7 +87,6 @@ func (p *AniListProvider) GetBookMetadata(_ context.Context, _, _ string) (*meta
 // If the raw query yields zero results and stripping parenthetical/bracket content
 // produces a different non-empty string, that variant is tried as a fallback.
 func (p *AniListProvider) SearchSeries(ctx context.Context, query string, limit int) ([]metadata.SeriesSearchResult, error) {
-	// Try raw query first
 	results, err := p.client.SearchMediaFull(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("search anilist: %w", err)
@@ -97,7 +96,6 @@ func (p *AniListProvider) SearchSeries(ctx context.Context, query string, limit 
 		return mapSearchResults(results), nil
 	}
 
-	// Try stripped variant if different and non-empty
 	stripped := strings.TrimSpace(bracketStripRe.ReplaceAllString(query, " "))
 	stripped = strings.TrimSpace(stripped)
 	if stripped != "" && stripped != query {
