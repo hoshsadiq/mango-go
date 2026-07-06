@@ -174,9 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return date;
   };
 
-  // Lock icon helper — now always renders an icon (clickable toggle).
-  // In view mode: filled lock if locked, outline lock-open if unlocked.
-  // The click handler is attached after innerHTML is set.
+  // Lock icon helper, now always renders an icon (clickable toggle).
   const lockIconHtml = (locked, lockField) => {
     if (locked) {
       return ` <i class="ph-bold ph-lock md-lock md-lock-toggle" data-lock-field="${lockField}" data-locked="true" title="Locked: this field won't be changed on refresh"></i>`;
@@ -211,11 +209,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error(errData.error || `Lock toggle failed (HTTP ${res.status})`);
       }
       const locks = await res.json();
-      // Update stored metadata locks
       if (mdOriginalMetadata) {
         mdOriginalMetadata.locks = locks;
       }
-      // Update the icon in-place
       const icon = metadataPanel.querySelector(`.md-lock-toggle[data-lock-field="${lockField}"]`);
       if (icon) {
         const isLocked = locks[lockFieldToResponseKey(lockField)];
@@ -315,14 +311,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const attachChipListeners = () => {
     metadataPanel.querySelectorAll('.md-chip-input-container').forEach(container => {
       const field = container.dataset.field;
-      // Remove chip
       container.querySelectorAll('.md-chip-remove').forEach(btn => {
         btn.addEventListener('click', () => {
           const chip = btn.closest('.md-chip');
           chip.remove();
         });
       });
-      // Add chip on Enter
       const input = container.querySelector('.md-chip-new-input');
       if (input) {
         input.addEventListener('keydown', e => {
@@ -330,7 +324,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             const val = input.value.trim();
             if (!val) return;
-            // Check for duplicates
             const existing = Array.from(container.querySelectorAll('.md-chip')).map(c =>
               c.textContent.replace('×', '').trim()
             );
@@ -498,7 +491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     html += '</div>';
 
-    // Info grid — always show in edit mode, conditionally in view mode
+    // Info grid, always show in edit mode, conditionally in view mode
     html += '<div class="md-info-grid">';
 
     // Publisher
@@ -807,14 +800,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!mdOriginalMetadata) return;
     const orig = mdOriginalMetadata;
 
-    // Collect current values from DOM
     const getVal = field => {
       const el = metadataPanel.querySelector(`[data-field="${field}"]`);
       if (!el) return undefined;
       return el.value;
     };
 
-    // Validate numeric fields first
     const numericFields = [
       'age_rating',
       'community_score',
@@ -840,7 +831,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Build PATCH body with only changed scalar fields
     const body = {};
 
-    // Text fields
     ['title', 'summary', 'publisher', 'language'].forEach(field => {
       const val = getVal(field);
       if (val === undefined) return;
@@ -850,7 +840,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    // Enum fields
     ['status', 'reading_direction'].forEach(field => {
       const val = getVal(field);
       if (val === undefined) return;
@@ -860,7 +849,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    // Numeric fields
     numericFields.forEach(field => {
       const val = getVal(field);
       if (val === undefined) return;
@@ -874,7 +862,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    // If nothing changed, just exit edit mode
     if (Object.keys(body).length === 0) {
       toast.success('No changes to save');
       mdEditMode = false;
@@ -882,7 +869,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // Disable save button and show loading
     const saveBtn = metadataPanel.querySelector('#md-save-btn');
     if (saveBtn) {
       saveBtn.disabled = true;
@@ -907,7 +893,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetchAndRenderMetadataPanel(folderId);
     } catch (err) {
       toast.error(err.message);
-      // Stay in edit mode — re-enable save button
+      // Stay in edit mode, re-enable save button
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save';
