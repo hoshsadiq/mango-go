@@ -65,7 +65,7 @@ func NewServer(app *core.App) *Server {
 	provider := metadataanilist.NewAniListProvider(
 		anilistClient,
 		cfg.Metadata.AniList.ExcludeSpoilerTags,
-		cfg.Metadata.CoverFailureMode,
+		metadataanilist.CoverFailureMode(cfg.Metadata.CoverFailureMode),
 	)
 	return &Server{
 		app:              app,

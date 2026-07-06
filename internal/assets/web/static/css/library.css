@@ -77,7 +77,7 @@
   box-shadow: 0 4px 12px rgba(var(--accent-color-rgb), 0.3);
 }
 
-/* Cover container — wraps folder thumbnail for overlay positioning */
+/* Cover container, wraps folder thumbnail for overlay positioning */
 .cover-container {
   position: relative;
   display: inline-block;
@@ -113,13 +113,13 @@
   background: rgba(0, 0, 0, 0.8);
 }
 
-/* Edit cover overlay — bottom-right of cover */
+/* Edit cover overlay, bottom-right of cover */
 .cover-edit-btn {
   bottom: 6px;
   right: 6px;
 }
 
-/* Lock overlay — top-right of cover */
+/* Lock overlay, top-right of cover */
 .cover-lock-btn {
   top: 6px;
   right: 6px;
@@ -204,7 +204,7 @@
   animation: fadeIn 0.3s ease;
 }
 
-/* Left side of page header: two visual rows — hero (title+badge) then actions */
+/* Left side of page header: two visual rows, hero (title+badge) then actions */
 .page-header-left {
   flex: 1;
   min-width: 0;
