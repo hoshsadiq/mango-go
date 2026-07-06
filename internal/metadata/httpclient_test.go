@@ -198,7 +198,6 @@ func TestRateLimiterThrottles(t *testing.T) {
 
 	start := time.Now()
 
-	// Fire 3 requests
 	for i := 0; i < 3; i++ {
 		req, _ := http.NewRequest("GET", server.URL, nil)
 		_, err := client.Do(req)
@@ -249,7 +248,6 @@ func TestTimeoutNoRetry(t *testing.T) {
 	if !strings.Contains(err.Error(), "context deadline exceeded") && !strings.Contains(err.Error(), "timeout") {
 		t.Fatalf("expected timeout error, got: %v", err)
 	}
-	// Should only make 1 request (no retries on timeout)
 	if requestCount != 1 {
 		t.Fatalf("expected 1 request (no retries on timeout), got %d", requestCount)
 	}

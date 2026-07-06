@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// Helper to create pointers to values
 func ptrTo[T any](v T) *T {
 	return &v
 }
@@ -23,7 +22,6 @@ func TestSeriesMetadataJSONNil(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	// Check that nil pointer fields are null
 	if result["status"] != nil {
 		t.Errorf("status should be null, got %v", result["status"])
 	}
@@ -52,7 +50,6 @@ func TestSeriesMetadataJSONNil(t *testing.T) {
 		t.Errorf("thumbnail_url should be null, got %v", result["thumbnail_url"])
 	}
 
-	// Check that nil slices are null
 	if result["genres"] != nil {
 		t.Errorf("genres should be null, got %v", result["genres"])
 	}
@@ -88,7 +85,6 @@ func TestSeriesMetadataJSONZeroValue(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	// Check that zero-value pointers are NOT null
 	if result["title"] == nil {
 		t.Errorf("title should be empty string, not null")
 	}
@@ -134,12 +130,10 @@ func TestSliceSerialization(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	// nil slice should be null
 	if result["genres"] != nil {
 		t.Errorf("genres (nil slice) should be null, got %v", result["genres"])
 	}
 
-	// empty slice should be []
 	if result["tags"] == nil {
 		t.Errorf("tags (empty slice) should be [], not null")
 	}
@@ -253,7 +247,6 @@ func TestSeriesMetadataRoundTrip(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	// Verify key fields
 	if restored.Title == nil || *restored.Title != "Naruto" {
 		t.Errorf("Title mismatch: %v", restored.Title)
 	}
@@ -281,7 +274,6 @@ func TestBookMetadataJSONNil(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	// Check that nil pointer fields are null
 	if result["title"] != nil {
 		t.Errorf("title should be null, got %v", result["title"])
 	}

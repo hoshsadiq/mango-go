@@ -86,40 +86,32 @@ func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 	backoff := rc.InitialBackoff
 
 	for attempt := 0; attempt <= rc.MaxRetries; attempt++ {
-		// Apply rate limiting if configured
 		if rc.RateLimiter != nil {
 			if err := rc.RateLimiter.Wait(ctx); err != nil {
 				return nil, fmt.Errorf("rate limiter error: %w", err)
 			}
 		}
 
-		// Execute the request
 		resp, err := rc.Client.Do(req)
 
-		// Check for context deadline exceeded (timeout) - don't retry
 		if err != nil && ctx.Err() != nil {
 			return nil, err
 		}
 
-		// If no error and status is not retryable, return the response
 		if err == nil && !isRetryableStatus(resp.StatusCode) {
 			return resp, nil
 		}
 
-		// If there's an error that's not a retryable status, return it immediately
 		if err != nil {
 			return resp, err
 		}
 
-		// If this is the last attempt, return the response
 		if attempt == rc.MaxRetries {
 			return resp, nil
 		}
 
-		// Determine backoff duration
 		waitDuration := backoff
 
-		// Check for Retry-After header
 		if resp.StatusCode == http.StatusTooManyRequests {
 			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
 				if seconds, err := strconv.Atoi(retryAfter); err == nil {
@@ -128,25 +120,20 @@ func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 			}
 		}
 
-		// Check if we would exceed the 30s total timeout
 		deadline, ok := ctx.Deadline()
 		if ok {
 			timeRemaining := time.Until(deadline)
 			if timeRemaining <= waitDuration {
-				// Not enough time for another retry, return current response
 				return resp, nil
 			}
 		}
 
-		// Wait before retrying
 		select {
 		case <-time.After(waitDuration):
-			// Continue to next attempt
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
 
-		// Double the backoff for next iteration
 		backoff *= 2
 	}
 

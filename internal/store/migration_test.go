@@ -135,12 +135,10 @@ func TestMetadataMigrationDown(t *testing.T) {
 		t.Fatalf("Failed to create migrate instance: %v", err)
 	}
 
-	// Apply all migrations up
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("Failed to apply migrations: %v", err)
 	}
 
-	// Verify tables exist
 	var count int
 	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='series_metadata'").Scan(&count)
 	if err != nil || count == 0 {
