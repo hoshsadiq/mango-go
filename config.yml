@@ -11,3 +11,8 @@ plugins:
   # The path to the plugins directory.
   path: "../mango-go-plugins"
   unload_timeout: 30 # The time in minutes after which idle plugins are unloaded.
+# metadata:
+#   cover_mode: direct  # direct | proxy | download (only direct supported currently)
+#   cover_failure_mode: ignore  # ignore (save without cover) | fail (abort on cover error)
+#   anilist:
+#     exclude_spoiler_tags: true  # exclude spoiler tags from AniList results

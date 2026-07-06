@@ -70,4 +70,53 @@ unknown_setting: "should be ignored"
 			t.Errorf("Expected default scan interval of 0 when unset in file, got %d", cfg.ScanInterval)
 		}
 	})
+
+	t.Run("Metadata defaults when section absent", func(t *testing.T) {
+		os.Remove("config.yml")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() returned an error: %v", err)
+		}
+
+		if cfg.Metadata.CoverMode != "direct" {
+			t.Errorf("Expected default cover_mode 'direct', got '%s'", cfg.Metadata.CoverMode)
+		}
+		if cfg.Metadata.CoverFailureMode != "ignore" {
+			t.Errorf("Expected default cover_failure_mode 'ignore', got '%s'", cfg.Metadata.CoverFailureMode)
+		}
+		if cfg.Metadata.AniList.ExcludeSpoilerTags != true {
+			t.Errorf("Expected default exclude_spoiler_tags true, got %v", cfg.Metadata.AniList.ExcludeSpoilerTags)
+		}
+	})
+
+	t.Run("Metadata YAML override", func(t *testing.T) {
+		configContent := `
+metadata:
+  cover_mode: direct
+  cover_failure_mode: fail
+  anilist:
+    exclude_spoiler_tags: false
+`
+		configPath := "config.yml"
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			t.Fatalf("Failed to write test config file: %v", err)
+		}
+		defer os.Remove(configPath)
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() returned an error: %v", err)
+		}
+
+		if cfg.Metadata.CoverMode != "direct" {
+			t.Errorf("Expected cover_mode 'direct', got '%s'", cfg.Metadata.CoverMode)
+		}
+		if cfg.Metadata.CoverFailureMode != "fail" {
+			t.Errorf("Expected cover_failure_mode 'fail', got '%s'", cfg.Metadata.CoverFailureMode)
+		}
+		if cfg.Metadata.AniList.ExcludeSpoilerTags != false {
+			t.Errorf("Expected exclude_spoiler_tags false, got %v", cfg.Metadata.AniList.ExcludeSpoilerTags)
+		}
+	})
 }
