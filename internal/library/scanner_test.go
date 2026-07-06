@@ -525,11 +525,9 @@ func TestChapterMetadataFromComicInfo(t *testing.T) {
 		t.Fatal("Expected chapter metadata to exist")
 	}
 
-	// ComicInfo Title overrides filename-parsed title
 	if meta.Title == nil || *meta.Title != "The Great Battle" {
 		t.Errorf("Expected title 'The Great Battle', got %v", meta.Title)
 	}
-	// ComicInfo Number overrides filename-parsed number
 	if meta.Number == nil || *meta.Number != "5" {
 		t.Errorf("Expected number '5', got %v", meta.Number)
 	}
@@ -567,7 +565,7 @@ func TestChapterMetadataFromFilenameOnly(t *testing.T) {
 	seriesDir := filepath.Join(libraryRoot, "Filename Series")
 	os.MkdirAll(seriesDir, 0755)
 
-	// No ComicInfo.xml — metadata comes from filename only
+	// No ComicInfo.xml, metadata comes from filename only
 	testutil.CreateTestCBZ(t, seriesDir, "Ch.007 - The Escape.cbz", []string{"p1.jpg"})
 
 	library.LibrarySync(app)
@@ -598,7 +596,7 @@ func TestChapterMetadataFromFilenameOnly(t *testing.T) {
 	if meta.Title == nil || *meta.Title != "The Escape" {
 		t.Errorf("Expected title 'The Escape' from filename, got %v", meta.Title)
 	}
-	// No ComicInfo → these should be nil
+	// No ComicInfo, these should be nil
 	if meta.Summary != nil {
 		t.Errorf("Expected nil summary without ComicInfo, got %v", meta.Summary)
 	}
@@ -642,7 +640,7 @@ func TestChapterMetadataSkippedOnUnchangedFile(t *testing.T) {
 		t.Fatalf("Failed to lock title: %v", err)
 	}
 
-	// Second scan — file unchanged, should skip metadata extraction entirely
+	// Second scan, file unchanged, should skip metadata extraction entirely
 	library.LibrarySync(app)
 
 	meta2, err := cms.GetChapterMetadata(chapterID)

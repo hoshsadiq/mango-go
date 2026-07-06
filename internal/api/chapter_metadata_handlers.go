@@ -60,7 +60,6 @@ func (s *Server) handleBulkUpdateChapterMetadata(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Validate chapter_ids count.
 	if len(req.ChapterIDs) == 0 {
 		RespondWithError(w, http.StatusBadRequest, "chapter_ids must not be empty")
 		return
@@ -70,7 +69,6 @@ func (s *Server) handleBulkUpdateChapterMetadata(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Validate that only bulk-applicable fields are present.
 	if len(req.Fields) == 0 {
 		RespondWithError(w, http.StatusBadRequest, "fields must not be empty")
 		return
@@ -82,14 +80,12 @@ func (s *Server) handleBulkUpdateChapterMetadata(w http.ResponseWriter, r *http.
 		}
 	}
 
-	// Parse the fields into a ChapterMetadata struct.
 	meta, err := parseBulkFields(req.Fields)
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// Build the updates map: same metadata for all chapter IDs.
 	cms := s.app.ChapterMetadataStore
 	if cms == nil {
 		cms = store.NewChapterMetadataStore(s.db)
@@ -111,7 +107,6 @@ func (s *Server) handleBulkUpdateChapterMetadata(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Auto-lock the updated fields on all successfully updated chapters.
 	for _, chapterID := range updated {
 		existing, err := cms.GetChapterMetadata(chapterID)
 		if err != nil {
@@ -124,10 +119,8 @@ func (s *Server) handleBulkUpdateChapterMetadata(w http.ResponseWriter, r *http.
 		}
 	}
 
-	// Build skipped entries with reasons.
 	skippedEntries := buildSkippedEntries(cms, skipped, req.Fields)
 
-	// Ensure slices are never null in JSON.
 	if updated == nil {
 		updated = []int64{}
 	}
@@ -204,7 +197,6 @@ func buildSkippedEntries(cms *store.ChapterMetadataStore, skippedIDs []int64, re
 
 	for _, id := range skippedIDs {
 		reason := "locked"
-		// Try to determine which specific field was locked.
 		m, err := cms.GetChapterMetadata(id)
 		if err == nil && m != nil {
 			reason = determineSkipReason(m, requestedFields)
@@ -616,7 +608,6 @@ func (s *Server) handleEditChapterMetadata(w http.ResponseWriter, r *http.Reques
 			}
 
 		default:
-			// Unknown fields ignored.
 		}
 	}
 

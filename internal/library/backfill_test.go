@@ -50,7 +50,6 @@ func TestParseChapterMetadata_PopulatesMetadataForChaptersWithoutRows(t *testing
 	st := store.New(app.DB())
 	cms := store.NewChapterMetadataStore(app.DB())
 
-	// Create a folder and chapter in the DB with a real CBZ on disk.
 	seriesDir := filepath.Join(app.Config().Library.Path, "Series A")
 	os.Mkdir(seriesDir, 0755)
 
@@ -75,7 +74,6 @@ func TestParseChapterMetadata_PopulatesMetadataForChaptersWithoutRows(t *testing
 		t.Fatalf("CreateChapter: %v", err)
 	}
 
-	// Verify no metadata exists yet.
 	got, err := cms.GetChapterMetadata(ch.ID)
 	if err != nil {
 		t.Fatalf("GetChapterMetadata before backfill: %v", err)
@@ -84,7 +82,6 @@ func TestParseChapterMetadata_PopulatesMetadataForChaptersWithoutRows(t *testing
 		t.Fatal("Expected no metadata before backfill")
 	}
 
-	// Run the backfill job.
 	ctx := &testutil.MockJobContext{App: app}
 	library.ParseChapterMetadata(ctx)
 
@@ -138,7 +135,6 @@ func TestParseChapterMetadata_SkipsChaptersWithExistingMetadata(t *testing.T) {
 		t.Fatalf("CreateChapter: %v", err)
 	}
 
-	// Pre-populate metadata with a custom title.
 	originalTitle := "Original Title"
 	err = cms.UpsertChapterMetadata(ch.ID, &metadata.ChapterMetadata{
 		Title: &originalTitle,
@@ -147,7 +143,6 @@ func TestParseChapterMetadata_SkipsChaptersWithExistingMetadata(t *testing.T) {
 		t.Fatalf("UpsertChapterMetadata: %v", err)
 	}
 
-	// Run the backfill job.
 	ctx := &testutil.MockJobContext{App: app}
 	library.ParseChapterMetadata(ctx)
 
@@ -185,7 +180,7 @@ func TestParseChapterMetadata_Idempotent(t *testing.T) {
 
 	ctx := &testutil.MockJobContext{App: app}
 
-	// First run — should create metadata from filename.
+	// First run, should create metadata from filename.
 	library.ParseChapterMetadata(ctx)
 
 	got, err := cms.GetChapterMetadata(ch.ID)
@@ -199,7 +194,7 @@ func TestParseChapterMetadata_Idempotent(t *testing.T) {
 		t.Errorf("Number: got %v, want '010'", got.Number)
 	}
 
-	// Second run — should process zero chapters (idempotent).
+	// Second run, should process zero chapters (idempotent).
 	library.ParseChapterMetadata(ctx)
 
 	got2, err := cms.GetChapterMetadata(ch.ID)
@@ -223,7 +218,6 @@ func TestParseChapterMetadata_HandlesExtractionErrorsGracefully(t *testing.T) {
 	seriesDir := filepath.Join(app.Config().Library.Path, "Series D")
 	os.Mkdir(seriesDir, 0755)
 
-	// Create a chapter in the DB pointing to a non-existent file.
 	badPath := filepath.Join(seriesDir, "Ch.042 - Missing.cbz")
 
 	folder, err := st.CreateFolder(seriesDir, "Series D", nil)
@@ -235,7 +229,7 @@ func TestParseChapterMetadata_HandlesExtractionErrorsGracefully(t *testing.T) {
 		t.Fatalf("CreateChapter: %v", err)
 	}
 
-	// Run the backfill job — should not panic or abort.
+	// Run the backfill job, should not panic or abort.
 	ctx := &testutil.MockJobContext{App: app}
 	library.ParseChapterMetadata(ctx)
 

@@ -99,14 +99,14 @@ func getChaptersWithoutMetadata(db *sql.DB, limit int) ([]chapterRow, error) {
 func processChapterMetadata(metaStore *store.ChapterMetadataStore, ch chapterRow) error {
 	merged := &metadata.ChapterMetadata{}
 
-	// 1. Parse filename (lower priority — applied first, then overwritten by ComicInfo).
+	// 1. Parse filename (lower priority, applied first, then overwritten by ComicInfo).
 	base := filepath.Base(ch.Path)
 	ext := filepath.Ext(base)
 	nameWithoutExt := strings.TrimSuffix(base, ext)
 	parsed := chapterparse.ParseFilename(nameWithoutExt)
 	applyParsedFilename(merged, parsed)
 
-	// 2. Extract ComicInfo.xml (higher priority — overwrites filename fields).
+	// 2. Extract ComicInfo.xml (higher priority, overwrites filename fields).
 	ci, err := comicinfo.ExtractFromArchive(ch.Path)
 	if err != nil {
 		// Log but still save whatever we got from the filename.
@@ -117,7 +117,7 @@ func processChapterMetadata(metaStore *store.ChapterMetadataStore, ch chapterRow
 		mergeComicInfoOver(merged, ciMeta)
 	}
 
-	// 3. Upsert — even if both sources yielded nothing, this creates the
+	// 3. Upsert, even if both sources yielded nothing, this creates the
 	//    metadata row so the chapter won't be re-processed.
 	return metaStore.UpsertChapterMetadata(ch.ID, merged)
 }
