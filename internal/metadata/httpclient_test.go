@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -425,6 +426,50 @@ func TestRetryOn503(t *testing.T) {
 	}
 	if requestCount != 2 {
 		t.Fatalf("expected 2 requests, got %d", requestCount)
+	}
+}
+
+// TestPostRetryPreservesBody verifies that POST request bodies are preserved across retries
+func TestPostRetryPreservesBody(t *testing.T) {
+	expectedBody := `{"query":"test query","variables":{"id":123}}`
+	requestCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("request %d: failed to read body: %v", requestCount, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if string(body) != expectedBody {
+			t.Errorf("request %d: expected body %q, got %q", requestCount, expectedBody, string(body))
+		}
+		if requestCount < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewRetryClient(
+		WithMaxRetries(3),
+		WithInitialBackoff(10*time.Millisecond),
+	)
+
+	req, _ := http.NewRequest("POST", server.URL, strings.NewReader(expectedBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if requestCount != 3 {
+		t.Fatalf("expected 3 requests, got %d", requestCount)
 	}
 }
 

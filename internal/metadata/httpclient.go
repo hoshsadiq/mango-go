@@ -1,7 +1,9 @@
 package metadata
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -85,10 +87,32 @@ func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	backoff := rc.InitialBackoff
 
+	// Buffer the request body so it can be replayed on retries.
+	// http.Client.Do consumes req.Body, so without this POST retries send an empty body.
+	if req.Body != nil && req.GetBody == nil {
+		bodyBytes, err := io.ReadAll(req.Body)
+		req.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
+		req.Body, _ = req.GetBody()
+	}
+
 	for attempt := 0; attempt <= rc.MaxRetries; attempt++ {
 		if rc.RateLimiter != nil {
 			if err := rc.RateLimiter.Wait(ctx); err != nil {
 				return nil, fmt.Errorf("rate limiter error: %w", err)
+			}
+		}
+
+		if attempt > 0 && req.GetBody != nil {
+			var err error
+			req.Body, err = req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("failed to reset request body for retry: %w", err)
 			}
 		}
 
@@ -127,6 +151,10 @@ func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 				return resp, nil
 			}
 		}
+
+		// Drain and close the response body before retry to prevent leaking connections
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
 
 		select {
 		case <-time.After(waitDuration):
