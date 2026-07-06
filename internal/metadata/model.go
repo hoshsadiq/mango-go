@@ -57,25 +57,24 @@ type SeriesTitle struct {
 // All scalar fields are pointers: nil = absent, pointer to zero-value = explicitly set
 // All collection fields are slices: nil = absent, empty slice = explicitly empty
 type SeriesMetadata struct {
-	Status                *SeriesStatus     `json:"status"`
-	Title                 *string           `json:"title"`
-	Titles                []SeriesTitle     `json:"titles"`
-	Summary               *string           `json:"summary"`
-	Publisher             *string           `json:"publisher"`
-	AlternativePublishers []string          `json:"alternative_publishers"`
-	ReadingDirection      *ReadingDirection `json:"reading_direction"`
-	AgeRating             *int              `json:"age_rating"`
-	Language              *string           `json:"language"`
-	Genres                []string          `json:"genres"`
-	Tags                  []string          `json:"tags"`
-	TotalBookCount        *int              `json:"total_book_count"`
-	Authors               []Author          `json:"authors"`
-	ReleaseYear           *int              `json:"release_year"`
-	ReleaseMonth          *int              `json:"release_month"`
-	ReleaseDay            *int              `json:"release_day"`
-	Links                 []WebLink         `json:"links"`
-	CommunityScore        *float64          `json:"community_score"`
-	ThumbnailURL          *string           `json:"thumbnail_url"`
+	Status           *SeriesStatus     `json:"status"`
+	Title            *string           `json:"title"`
+	Titles           []SeriesTitle     `json:"titles"`
+	Summary          *string           `json:"summary"`
+	Publisher        *string           `json:"publisher"`
+	ReadingDirection *ReadingDirection `json:"reading_direction"`
+	AgeRating        *int              `json:"age_rating"`
+	Language         *string           `json:"language"`
+	Genres           []string          `json:"genres"`
+	Tags             []string          `json:"tags"`
+	TotalBookCount   *int              `json:"total_book_count"`
+	Authors          []Author          `json:"authors"`
+	ReleaseYear      *int              `json:"release_year"`
+	ReleaseMonth     *int              `json:"release_month"`
+	ReleaseDay       *int              `json:"release_day"`
+	Links            []WebLink         `json:"links"`
+	CommunityScore   *float64          `json:"community_score"`
+	ThumbnailURL     *string           `json:"thumbnail_url"`
 }
 
 // BookMetadata contains metadata about a specific book/volume in a series
