@@ -96,7 +96,6 @@ func buildMetadataFieldsResponse(row *store.SeriesMetadataRow) metadataFieldsRes
 		},
 	}
 
-	// Convert sql.Null* types to pointers for JSON null serialization.
 	if row.Status.Valid {
 		resp.Status = &row.Status.String
 	}
@@ -137,7 +136,7 @@ func buildMetadataFieldsResponse(row *store.SeriesMetadataRow) metadataFieldsRes
 		resp.ThumbnailURL = &row.ThumbnailURL.String
 	}
 
-	// Ensure slices are never null in JSON — always [].
+	// Ensure slices are never null in JSON, always [].
 	resp.Genres = row.Genres
 	if resp.Genres == nil {
 		resp.Genres = []string{}
@@ -185,7 +184,7 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 		Metadata: buildMetadataFieldsResponse(row),
 	}
 
-	// Provider link is optional — missing link means provider: null, not a 404.
+	// Provider link is optional. Missing link means provider: null, not a 404.
 	link, err := s.store.GetProviderLink(folderID)
 	if err != nil {
 		if !errors.Is(err, store.ErrProviderLinkNotFound) {
@@ -193,7 +192,7 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 			RespondWithError(w, http.StatusInternalServerError, "Failed to load provider link")
 			return
 		}
-		// ErrProviderLinkNotFound → provider stays nil
+		// ErrProviderLinkNotFound: provider stays nil
 	} else {
 		resp.Provider = &providerResponse{
 			Name: link.ProviderName,
@@ -235,7 +234,6 @@ func (s *Server) handleSearchMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure results is never null in JSON.
 	if results == nil {
 		results = []metadata.SeriesSearchResult{}
 	}
@@ -383,7 +381,7 @@ func (s *Server) handleResetMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check existence first — ResetSeriesMetadata silently succeeds when no row exists.
+	// Check existence first. ResetSeriesMetadata silently succeeds when no row exists.
 	_, err = s.store.GetSeriesMetadata(folderID)
 	if err != nil {
 		if errors.Is(err, store.ErrMetadataNotFound) {
@@ -415,7 +413,7 @@ func (s *Server) handleUnlinkMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check existence first — UnlinkSeriesMetadata silently succeeds when no row exists.
+	// Check existence first. UnlinkSeriesMetadata silently succeeds when no row exists.
 	_, err = s.store.GetSeriesMetadata(folderID)
 	if err != nil {
 		if errors.Is(err, store.ErrMetadataNotFound) {
@@ -490,7 +488,6 @@ func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Collect validated field updates before applying any.
 	type fieldUpdate struct {
 		name  string
 		value interface{} // nil means clear (set to NULL)
@@ -638,11 +635,10 @@ func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
 			}
 
 		default:
-			// Unknown or collection fields — ignored (Task 10 is scalar-only).
+			// Unknown or collection fields (scalar-only).
 		}
 	}
 
-	// Ensure metadata row exists (Task 10: create if absent, do not 404).
 	if _, err := s.store.GetSeriesMetadata(folderID); err != nil {
 		if !errors.Is(err, store.ErrMetadataNotFound) {
 			log.Printf("GetSeriesMetadata(%d): %v", folderID, err)
@@ -656,7 +652,6 @@ func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Apply all validated field updates.
 	for _, u := range updates {
 		if err := s.store.UpdateMetadataField(folderID, u.name, u.value); err != nil {
 			log.Printf("UpdateMetadataField(%d, %q): %v", folderID, u.name, err)
@@ -665,7 +660,6 @@ func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Read back the full metadata and return in same format as GET.
 	row, err := s.store.GetSeriesMetadata(folderID)
 	if err != nil {
 		log.Printf("GetSeriesMetadata(%d) after edit: %v", folderID, err)
@@ -735,7 +729,7 @@ func (s *Server) handleEditLocks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Empty body — still check existence for 404.
+		// Empty body, still check existence for 404.
 		if _, err := s.store.GetSeriesMetadata(folderID); err != nil {
 			if errors.Is(err, store.ErrMetadataNotFound) {
 				RespondWithError(w, http.StatusNotFound, "no metadata found for this folder")
@@ -747,7 +741,6 @@ func (s *Server) handleEditLocks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Read back full lock state.
 	row, err := s.store.GetSeriesMetadata(folderID)
 	if err != nil {
 		log.Printf("GetSeriesMetadata(%d) after lock update: %v", folderID, err)

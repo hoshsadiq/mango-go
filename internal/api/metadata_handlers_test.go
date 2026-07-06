@@ -289,7 +289,6 @@ func TestHandleGetMetadata_NilFieldsAreNull_EmptySlicesAreArray(t *testing.T) {
 	server, router, cookie := setupMetadataTestData(t)
 	folder, _ := server.Store().CreateFolder("/library/NilFields", "NilFields", nil)
 
-	// Create metadata with only genres set (empty), everything else nil/default
 	meta := &metadata.SeriesMetadata{
 		Genres: []string{},
 	}
@@ -306,7 +305,6 @@ func TestHandleGetMetadata_NilFieldsAreNull_EmptySlicesAreArray(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
 	}
 
-	// Parse as raw JSON to check null vs [] distinction
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -316,7 +314,6 @@ func TestHandleGetMetadata_NilFieldsAreNull_EmptySlicesAreArray(t *testing.T) {
 		t.Fatalf("unmarshal metadata: %v", err)
 	}
 
-	// Nil pointer fields should be JSON null
 	if string(metaRaw["status"]) != "null" {
 		t.Errorf("status should be null, got %s", metaRaw["status"])
 	}
@@ -330,7 +327,6 @@ func TestHandleGetMetadata_NilFieldsAreNull_EmptySlicesAreArray(t *testing.T) {
 		t.Errorf("community_score should be null, got %s", metaRaw["community_score"])
 	}
 
-	// Slice fields should be [] (empty array), never null
 	if string(metaRaw["genres"]) != "[]" {
 		t.Errorf("genres should be [], got %s", metaRaw["genres"])
 	}
@@ -347,7 +343,6 @@ func TestHandleGetMetadata_NilFieldsAreNull_EmptySlicesAreArray(t *testing.T) {
 		t.Errorf("titles should be [], got %s", metaRaw["titles"])
 	}
 
-	// Provider should be null
 	if string(raw["provider"]) != "null" {
 		t.Errorf("provider should be null, got %s", raw["provider"])
 	}
