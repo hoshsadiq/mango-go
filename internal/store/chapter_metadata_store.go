@@ -61,13 +61,11 @@ func (s *ChapterMetadataStore) upsertInTx(tx *sql.Tx, chapterID int64, meta *met
 
 	changed := false
 
-	// 1. Ensure a metadata row exists for this chapter.
 	_, err := tx.Exec("INSERT OR IGNORE INTO chapter_metadata (chapter_id) VALUES (?)", chapterID)
 	if err != nil {
 		return false, err
 	}
 
-	// 2. Read metadataID and all lock states.
 	var metadataID int64
 	var titleLock, numberLock, sortNumberLock, volumeLock, summaryLock bool
 	var notesLock, releaseDateLock, languageLock, chapterTypeLock bool
@@ -90,7 +88,6 @@ func (s *ChapterMetadataStore) upsertInTx(tx *sql.Tx, chapterID int64, meta *met
 		return false, err
 	}
 
-	// 3. Build dynamic UPDATE for non-nil, non-locked scalar fields.
 	var setClauses []string
 	var args []interface{}
 
@@ -172,7 +169,6 @@ func (s *ChapterMetadataStore) upsertInTx(tx *sql.Tx, chapterID int64, meta *met
 		changed = true
 	}
 
-	// 4. Child tables: nil = keep existing, non-nil = replace.
 	// Chapter metadata child tables have no lock columns.
 	if meta.Authors != nil {
 		if _, err = tx.Exec("DELETE FROM chapter_metadata_authors WHERE chapter_metadata_id = ?", metadataID); err != nil {
@@ -213,7 +209,6 @@ func (s *ChapterMetadataStore) upsertInTx(tx *sql.Tx, chapterID int64, meta *met
 		changed = true
 	}
 
-	// 5. Always update timestamp.
 	if _, err = tx.Exec("UPDATE chapter_metadata SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", metadataID); err != nil {
 		return false, err
 	}
@@ -319,7 +314,6 @@ func (s *ChapterMetadataStore) GetChapterMetadata(chapterID int64) (*metadata.Ch
 	m.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
 	m.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
 
-	// Initialize and load child slices.
 	m.Authors = []metadata.ChapterMetadataAuthor{}
 	m.Genres = []string{}
 	m.Tags = []string{}

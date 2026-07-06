@@ -8,7 +8,7 @@ type ChapterMetadata struct {
 	ID        int64
 	ChapterID int64
 
-	// Scalar fields — nil means "not set"
+	// Scalar fields, nil means "not set"
 	Title           *string
 	Number          *string
 	SortNumber      *float64
@@ -32,7 +32,7 @@ type ChapterMetadata struct {
 	Genres  []string
 	Tags    []string
 
-	// Lock fields — true means "locked, do not overwrite"
+	// Lock fields, true means "locked, do not overwrite"
 	TitleLock           bool
 	NumberLock          bool
 	SortNumberLock      bool

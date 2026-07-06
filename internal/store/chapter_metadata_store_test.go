@@ -61,7 +61,6 @@ func TestChapterMetadataCreateRead(t *testing.T) {
 		t.Fatal("GetChapterMetadata returned nil")
 	}
 
-	// Scalar fields
 	if got.Title == nil || *got.Title != "Chapter 1" {
 		t.Errorf("Title: got %v, want 'Chapter 1'", got.Title)
 	}
@@ -117,7 +116,6 @@ func TestChapterMetadataCreateRead(t *testing.T) {
 		t.Errorf("ChapterID: got %d, want %d", got.ChapterID, chapterID)
 	}
 
-	// Child tables
 	if len(got.Authors) != 1 || got.Authors[0].Name != "Kishimoto" || got.Authors[0].Role != "Writer" {
 		t.Errorf("Authors: got %v", got.Authors)
 	}
@@ -154,7 +152,6 @@ func TestChapterMetadataUpsertNilSkip(t *testing.T) {
 	folderID := createTestFolder(t, s, "NilSkipSeries")
 	chapterID := createTestChapter(t, s, folderID, "/lib/NilSkip/ch1.cbz", "hashnilskip")
 
-	// First upsert: set Title and Summary.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title:   ptrTo("Original Title"),
 		Summary: ptrTo("Original Summary"),
@@ -162,7 +159,7 @@ func TestChapterMetadataUpsertNilSkip(t *testing.T) {
 		t.Fatalf("first upsert: %v", err)
 	}
 
-	// Second upsert: update Title only, Summary nil → should be preserved.
+	// Second upsert: update Title only, Summary nil, should be preserved.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title: ptrTo("Updated Title"),
 	}); err != nil {
@@ -200,21 +197,18 @@ func TestChapterMetadataLockEnforcement(t *testing.T) {
 	folderID := createTestFolder(t, s, "LockSeries")
 	chapterID := createTestChapter(t, s, folderID, "/lib/Lock/ch1.cbz", "hashlock")
 
-	// Set initial title.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title: ptrTo("Original Title"),
 	}); err != nil {
 		t.Fatalf("initial upsert: %v", err)
 	}
 
-	// Lock the title field.
 	if err := cms.UpdateChapterMetadataLocks(chapterID, &metadata.ChapterMetadataLocks{
 		TitleLock: true,
 	}); err != nil {
 		t.Fatalf("UpdateChapterMetadataLocks: %v", err)
 	}
 
-	// Try to update the locked title.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title: ptrTo("New Title"),
 	}); err != nil {
@@ -242,7 +236,6 @@ func TestChapterMetadataLockMultipleFields(t *testing.T) {
 	folderID := createTestFolder(t, s, "MultiLockSeries")
 	chapterID := createTestChapter(t, s, folderID, "/lib/MultiLock/ch1.cbz", "hashmultilock")
 
-	// Set initial values.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title:   ptrTo("Title"),
 		Summary: ptrTo("Summary"),
@@ -259,7 +252,6 @@ func TestChapterMetadataLockMultipleFields(t *testing.T) {
 		t.Fatalf("UpdateChapterMetadataLocks: %v", err)
 	}
 
-	// Try to update all three.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title:   ptrTo("New Title"),
 		Summary: ptrTo("New Summary"),
@@ -292,7 +284,6 @@ func TestChapterMetadataChildTables(t *testing.T) {
 	folderID := createTestFolder(t, s, "ChildSeries")
 	chapterID := createTestChapter(t, s, folderID, "/lib/Child/ch1.cbz", "hashchild")
 
-	// Set initial child data.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Authors: []metadata.ChapterMetadataAuthor{{Name: "Author1", Role: "Writer"}},
 		Genres:  []string{"Action", "Adventure"},
@@ -312,7 +303,7 @@ func TestChapterMetadataChildTables(t *testing.T) {
 		t.Errorf("Genres: got %v, want [Action Adventure]", got.Genres)
 	}
 
-	// Replace genres with empty slice → clears them.
+	// Replace genres with empty slice, clears them.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Genres: []string{},
 	}); err != nil {
@@ -340,7 +331,7 @@ func TestChapterMetadataGetByFolder(t *testing.T) {
 	folderID := createTestFolder(t, s, "FolderSeries")
 	ch1 := createTestChapter(t, s, folderID, "/lib/Folder/ch1.cbz", "hashfolder1")
 	ch2 := createTestChapter(t, s, folderID, "/lib/Folder/ch2.cbz", "hashfolder2")
-	// ch3 has no metadata — should not appear in results.
+	// ch3 has no metadata, should not appear in results.
 	_ = createTestChapter(t, s, folderID, "/lib/Folder/ch3.cbz", "hashfolder3")
 
 	if err := cms.UpsertChapterMetadata(ch1, &metadata.ChapterMetadata{
@@ -416,7 +407,6 @@ func TestBulkUpdateChapterMetadata(t *testing.T) {
 		t.Errorf("expected 0 skipped, got %d: %v", len(skipped), skipped)
 	}
 
-	// Verify data was written.
 	got1, _ := cms.GetChapterMetadata(ch1)
 	if got1.Title == nil || *got1.Title != "Bulk Ch1" {
 		t.Errorf("ch1 title: got %v, want 'Bulk Ch1'", got1.Title)
@@ -434,7 +424,6 @@ func TestBulkUpdateChapterMetadataLimitExceeded(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	cms := store.NewChapterMetadataStore(db)
 
-	// Build a map with 501 entries.
 	updates := make(map[int64]*metadata.ChapterMetadata, 501)
 	for i := int64(1); i <= 501; i++ {
 		updates[i] = &metadata.ChapterMetadata{Title: ptrTo("title")}
@@ -458,7 +447,6 @@ func TestBulkUpdateChapterMetadataMixedLocks(t *testing.T) {
 	ch1 := createTestChapter(t, s, folderID, "/lib/Mixed/ch1.cbz", "hashmixed1")
 	ch2 := createTestChapter(t, s, folderID, "/lib/Mixed/ch2.cbz", "hashmixed2")
 
-	// Set initial titles.
 	if err := cms.UpsertChapterMetadata(ch1, &metadata.ChapterMetadata{
 		Title: ptrTo("Ch1 Original"),
 	}); err != nil {
@@ -478,8 +466,8 @@ func TestBulkUpdateChapterMetadataMixedLocks(t *testing.T) {
 	}
 
 	// Bulk update both with title-only updates.
-	// ch1: title locked → all fields locked → skipped
-	// ch2: title unlocked → updated
+	// ch1: title locked, all fields locked, skipped
+	// ch2: title unlocked, updated
 	updates := map[int64]*metadata.ChapterMetadata{
 		ch1: {Title: ptrTo("Ch1 New")},
 		ch2: {Title: ptrTo("Ch2 New")},
@@ -497,13 +485,11 @@ func TestBulkUpdateChapterMetadataMixedLocks(t *testing.T) {
 		t.Errorf("skipped: got %v, want [%d]", skipped, ch1)
 	}
 
-	// Verify ch1 title is unchanged.
 	got1, _ := cms.GetChapterMetadata(ch1)
 	if *got1.Title != "Ch1 Original" {
 		t.Errorf("ch1 locked title was overwritten: got %q", *got1.Title)
 	}
 
-	// Verify ch2 title is updated.
 	got2, _ := cms.GetChapterMetadata(ch2)
 	if *got2.Title != "Ch2 New" {
 		t.Errorf("ch2 title not updated: got %q", *got2.Title)
@@ -518,14 +504,12 @@ func TestUpdateChapterMetadataLocks(t *testing.T) {
 	folderID := createTestFolder(t, s, "LocksUpdateSeries")
 	chapterID := createTestChapter(t, s, folderID, "/lib/LocksUpdate/ch1.cbz", "hashlocksup")
 
-	// Create metadata row first.
 	if err := cms.UpsertChapterMetadata(chapterID, &metadata.ChapterMetadata{
 		Title: ptrTo("Test"),
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	// Set locks.
 	locks := &metadata.ChapterMetadataLocks{
 		TitleLock:     true,
 		SummaryLock:   true,
@@ -536,7 +520,6 @@ func TestUpdateChapterMetadataLocks(t *testing.T) {
 		t.Fatalf("UpdateChapterMetadataLocks: %v", err)
 	}
 
-	// Verify locks are set.
 	got, err := cms.GetChapterMetadata(chapterID)
 	if err != nil {
 		t.Fatalf("GetChapterMetadata: %v", err)

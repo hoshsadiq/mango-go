@@ -15,10 +15,10 @@ type ParsedFilename struct {
 }
 
 var (
-	// Pattern 1: Vol+Ch combined — Vol.01 Ch.001 or v01 c001
+	// Pattern 1: Vol+Ch combined, Vol.01 Ch.001 or v01 c001
 	volChRe = regexp.MustCompile(`(?i)(?:vol\.?\s*(\d+(?:\.\d+)?)\s+)?ch\.?\s*(\d+(?:\.\d+)?)\s*(?:-\s*(.+))?`)
 
-	// Pattern 2: Ch. prefix — Ch.001 or Chapter 5
+	// Pattern 2: Ch. prefix, Ch.001 or Chapter 5
 	chPrefixRe = regexp.MustCompile(`(?i)ch(?:apter)?\.?\s*(\d+(?:\.\d+)?)\s*(?:-\s*(.+))?`)
 
 	// Pattern 3: Series-c001 format
@@ -27,10 +27,10 @@ var (
 	// Pattern 5: Series v01 c001
 	vCRe = regexp.MustCompile(`(?i)v(\d+(?:\.\d+)?)\s+c(\d+(?:\.\d+)?)`)
 
-	// Pattern 7: Number - Title — 001 - Title
+	// Pattern 7: Number - Title, 001 - Title
 	numTitleRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)\s+-\s+(.+)$`)
 
-	// Pattern 8: Bare number — 001 or 42
+	// Pattern 8: Bare number, 001 or 42
 	bareNumRe = regexp.MustCompile(`^(\d+(?:\.\d+)?)$`)
 
 	// Pattern 4 helper: strip leading [Group] tag
@@ -51,7 +51,7 @@ func ParseFilename(filename string) *ParsedFilename {
 		// Only match if we actually have a vol or ch prefix keyword in the match
 		// The regex requires "ch" so this is a valid pattern 1/2 match
 		if m[1] != "" {
-			// Has volume — this is pattern 1
+			// Has volume, this is pattern 1
 			result.Volume = strPtr(cleanVolume(m[1]))
 			result.Number = strPtr(m[2])
 			result.SortNumber = parseFloat(m[2])
@@ -82,7 +82,7 @@ func ParseFilename(filename string) *ParsedFilename {
 		return result
 	}
 
-	// Pattern 4: [Group] prefix — strip tag and retry patterns 1 & 2
+	// Pattern 4: [Group] prefix, strip tag and retry patterns 1 & 2
 	if groupTagRe.MatchString(filename) {
 		stripped := groupTagRe.ReplaceAllString(filename, "")
 		stripped = strings.TrimSpace(stripped)
