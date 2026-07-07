@@ -630,7 +630,10 @@ func (m *MangoAPI) elementToJS(vm *goja.Runtime, selection *goquery.Selection) g
 	element.Set("textContent", selection.Text())
 
 	// innerHTML property
-	html, _ := selection.Html()
+	html, htmlErr := selection.Html()
+	if htmlErr != nil {
+		html = ""
+	}
 	element.Set("innerHTML", html)
 
 	// getAttribute method

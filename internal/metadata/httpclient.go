@@ -98,7 +98,10 @@ func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 		req.GetBody = func() (io.ReadCloser, error) {
 			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
 		}
-		req.Body, _ = req.GetBody()
+		req.Body, err = req.GetBody()
+		if err != nil {
+			return nil, fmt.Errorf("failed to reset request body: %w", err)
+		}
 	}
 
 	for attempt := 0; attempt <= rc.MaxRetries; attempt++ {
