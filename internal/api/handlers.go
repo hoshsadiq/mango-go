@@ -12,6 +12,17 @@ import (
 	"github.com/vrsandeep/mango-go/internal/library/chapterfiles"
 )
 
+// parseIDParam extracts and parses an integer ID from a chi URL parameter.
+// Returns the parsed ID and true on success, or writes a 400 error and returns false.
+func parseIDParam(w http.ResponseWriter, r *http.Request, param string) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, param), 10, 64)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid "+param+" parameter")
+		return 0, false
+	}
+	return id, true
+}
+
 // getListParams extracts all query params for list endpoints.
 func getListParams(r *http.Request) (page, perPage int, search, sortBy, sortDir string) {
 	page, _ = strconv.Atoi(r.URL.Query().Get("page"))
@@ -159,8 +170,14 @@ func (s *Server) handleGetChapterNeighbors(w http.ResponseWriter, r *http.Reques
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	folderID, _ := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
-	chapterID, _ := strconv.ParseInt(chi.URLParam(r, "chapterID"), 10, 64)
+	folderID, ok := parseIDParam(w, r, "folderID")
+	if !ok {
+		return
+	}
+	chapterID, ok := parseIDParam(w, r, "chapterID")
+	if !ok {
+		return
+	}
 
 	neighbors, err := s.store.GetChapterNeighbors(folderID, chapterID, user.ID)
 	if err != nil {
