@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/vrsandeep/mango-go/internal/metadata"
 )
@@ -131,8 +132,10 @@ const getMediaFullQuery = `query ($id: Int) {
 // Returns an empty slice (not nil) when there are no results.
 // The query string is truncated to 400 characters before sending.
 func (c *Client) SearchMediaFull(ctx context.Context, query string, limit int) ([]MediaFull, error) {
-	if len(query) > maxQueryLength {
-		query = query[:maxQueryLength]
+	// Truncate on rune boundaries to avoid splitting multi-byte CJK characters.
+	if utf8.RuneCountInString(query) > maxQueryLength {
+		runes := []rune(query)
+		query = string(runes[:maxQueryLength])
 	}
 
 	body := map[string]interface{}{

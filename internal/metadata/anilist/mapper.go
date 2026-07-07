@@ -179,6 +179,8 @@ func mapScore(avg *int) *float64 {
 	if avg == nil {
 		return nil
 	}
+	// AniList scores are 0-100; divide by 10 for 0-10 scale.
+	// math.Round preserves 1-decimal precision for non-integer inputs.
 	v := math.Round(float64(*avg)/10.0*10) / 10
 	return &v
 }

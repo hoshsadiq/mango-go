@@ -206,6 +206,8 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 		args = append(args, *meta.ThumbnailURL)
 	}
 
+	// Field names in setClauses come from validScalarFields keys (allowlist),
+	// so fmt.Sprintf is safe from SQL injection here.
 	if len(setClauses) > 0 {
 		query := fmt.Sprintf("UPDATE series_metadata SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 		args = append(args, metadataID)
@@ -214,8 +216,12 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 		}
 	}
 
+	// Track whether any field was actually modified so we only bump updated_at when needed.
+	changed := len(setClauses) > 0
+
 	// Handle collection fields: nil = keep existing, non-nil = replace.
 	if meta.Genres != nil && !genresLock {
+		changed = true
 		if _, err = tx.Exec("DELETE FROM series_metadata_genres WHERE metadata_id = ?", metadataID); err != nil {
 			return err
 		}
@@ -227,6 +233,7 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 	}
 
 	if meta.Tags != nil && !tagsLock {
+		changed = true
 		if _, err = tx.Exec("DELETE FROM series_metadata_tags WHERE metadata_id = ?", metadataID); err != nil {
 			return err
 		}
@@ -238,6 +245,7 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 	}
 
 	if meta.Authors != nil && !authorsLock {
+		changed = true
 		if _, err = tx.Exec("DELETE FROM series_metadata_authors WHERE metadata_id = ?", metadataID); err != nil {
 			return err
 		}
@@ -250,6 +258,7 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 	}
 
 	if meta.Links != nil && !linksLock {
+		changed = true
 		if _, err = tx.Exec("DELETE FROM series_metadata_links WHERE metadata_id = ?", metadataID); err != nil {
 			return err
 		}
@@ -262,6 +271,7 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 	}
 
 	if meta.Titles != nil && !titlesLock {
+		changed = true
 		if _, err = tx.Exec("DELETE FROM series_metadata_titles WHERE metadata_id = ?", metadataID); err != nil {
 			return err
 		}
@@ -273,8 +283,10 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 		}
 	}
 
-	if _, err = tx.Exec("UPDATE series_metadata SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", metadataID); err != nil {
-		return err
+	if changed {
+		if _, err = tx.Exec("UPDATE series_metadata SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", metadataID); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()
@@ -313,8 +325,14 @@ func (s *Store) GetSeriesMetadata(folderID int64) (*SeriesMetadataRow, error) {
 		}
 		return nil, err
 	}
-	row.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	row.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	row.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	row.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at: %w", err)
+	}
 
 	row.Genres = []string{}
 	row.Tags = []string{}
@@ -450,7 +468,10 @@ func (s *Store) GetProviderLink(folderID int64) (*ProviderLink, error) {
 		}
 		return nil, err
 	}
-	link.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	link.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
 	return link, nil
 }
 
