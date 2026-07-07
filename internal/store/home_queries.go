@@ -98,7 +98,9 @@ func (s *Store) GetNextUp(userID int64, limit int) ([]*models.HomeSectionItem, e
 		if err := rows.Scan(&f.id, &f.name, &thumbnail, &lastRead); err != nil {
 			continue
 		}
-		f.lastReadTime, _ = time.Parse("2006-01-02 15:04:05", lastRead)
+		if t, err := time.Parse("2006-01-02 15:04:05", lastRead); err == nil {
+			f.lastReadTime = t
+		}
 		f.thumbnail = thumbnail.String
 		folders = append(folders, f)
 	}

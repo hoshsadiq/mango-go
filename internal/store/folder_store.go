@@ -26,7 +26,10 @@ func (s *Store) CreateFolder(path, name string, parentID *int64) (*models.Folder
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("last insert id: %w", err)
+	}
 	return &models.Folder{ID: id, Path: path, Name: name, ParentID: parentID}, nil
 }
 
@@ -380,12 +383,16 @@ func (s *Store) ListItems(opts ListItemsOptions) (*models.Folder, []*models.Fold
 			return currentFolder, nil, nil, 0, err
 		}
 		if createdAtStr.Valid {
-			createdAt.Time, _ = time.Parse("2006-01-02 15:04:05", createdAtStr.String)
-			createdAt.Valid = true
+			if t, err := time.Parse("2006-01-02 15:04:05", createdAtStr.String); err == nil {
+				createdAt.Time = t
+				createdAt.Valid = true
+			}
 		}
 		if updatedAtStr.Valid {
-			updatedAt.Time, _ = time.Parse("2006-01-02 15:04:05", updatedAtStr.String)
-			updatedAt.Valid = true
+			if t, err := time.Parse("2006-01-02 15:04:05", updatedAtStr.String); err == nil {
+				updatedAt.Time = t
+				updatedAt.Valid = true
+			}
 		}
 		if itemType == 1 { // Folder
 			folder.ID = chapter.ID
@@ -644,7 +651,10 @@ func (s *Store) UpdateFolderRating(folderID int64, rating *int) error {
 	if err != nil {
 		return err
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
 	if rows == 0 {
 		return ErrFolderNotFound
 	}

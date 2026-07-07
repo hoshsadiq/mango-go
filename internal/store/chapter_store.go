@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -31,7 +32,10 @@ func (s *Store) CreateChapterWithMetadata(folderID int64, path, hash string, pag
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("last insert id: %w", err)
+	}
 	return &models.Chapter{ID: id, FolderID: folderID, Path: path, ContentHash: hash, PageCount: pageCount}, nil
 }
 
