@@ -122,7 +122,7 @@ func TestSearchMediaFull_ParsesResults(t *testing.T) {
 	assertEqual(t, "ExternalLinks[0].URL", m.ExternalLinks[0].URL, "https://example.com")
 	assertEqual(t, "ExternalLinks[0].Site", m.ExternalLinks[0].Site, "Official")
 	assertEqual(t, "ExternalLinks[0].Type", m.ExternalLinks[0].Type, "INFO")
-	assertEqual(t, "SiteUrl", m.SiteUrl, "https://anilist.co/manga/30013")
+	assertEqual(t, "SiteURL", m.SiteURL, "https://anilist.co/manga/30013")
 	assertEqual(t, "CoverImage.Large", m.CoverImage.Large, "https://img.anilist.co/large.jpg")
 
 	m2 := results[1]

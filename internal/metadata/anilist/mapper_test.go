@@ -546,7 +546,7 @@ func TestMapAgeRating(t *testing.T) {
 func TestMapLinksFromMedia(t *testing.T) {
 	t.Run("maps external links and appends AniList", func(t *testing.T) {
 		var m anilist.MediaFull
-		m.SiteUrl = "https://anilist.co/manga/20"
+		m.SiteURL = "https://anilist.co/manga/20"
 		m.ExternalLinks = append(m.ExternalLinks, struct {
 			URL  string `json:"url"`
 			Site string `json:"site"`
@@ -575,7 +575,7 @@ func TestMapLinksFromMedia(t *testing.T) {
 
 	t.Run("no external links still appends AniList", func(t *testing.T) {
 		var m anilist.MediaFull
-		m.SiteUrl = "https://anilist.co/manga/20"
+		m.SiteURL = "https://anilist.co/manga/20"
 		links := mapLinksFromMedia(m)
 		if len(links) != 1 {
 			t.Fatalf("got %d links, want 1", len(links))
@@ -628,8 +628,8 @@ func TestMapDescription(t *testing.T) {
 		if got == nil {
 			t.Fatal("got nil")
 		}
-		if *got != "Line 1italic text" {
-			t.Errorf("got %q, want %q", *got, "Line 1italic text")
+		if *got != "Line 1\nitalic text" {
+			t.Errorf("got %q, want %q", *got, "Line 1\nitalic text")
 		}
 	})
 }
@@ -665,7 +665,7 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		Genres:          []string{"Action", "Adventure"},
 		IsAdult:         false,
 		CountryOfOrigin: "JP",
-		SiteUrl:         "https://anilist.co/manga/20",
+		SiteURL:         "https://anilist.co/manga/20",
 		Volumes:         ptrInt(72),
 		AverageScore:    ptrInt(84),
 	}
@@ -769,7 +769,7 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 
 func TestMapMediaToSearchResult(t *testing.T) {
 	t.Run("uses English title when available", func(t *testing.T) {
-		media := anilist.MediaFull{ID: 20, SiteUrl: "https://anilist.co/manga/20"}
+		media := anilist.MediaFull{ID: 20, SiteURL: "https://anilist.co/manga/20"}
 		media.Title.English = "Naruto"
 		media.Title.Romaji = "NARUTO"
 		media.CoverImage.Large = "https://img.anilist.co/naruto.jpg"
@@ -798,6 +798,18 @@ func TestMapMediaToSearchResult(t *testing.T) {
 		r := MapMediaToSearchResult(media)
 		if r.Title != "Solo Leveling" {
 			t.Errorf("title: got %q, want Solo Leveling", r.Title)
+		}
+	})
+
+	t.Run("falls back to Native when English and Romaji empty", func(t *testing.T) {
+		media := anilist.MediaFull{ID: 40}
+		media.Title.Native = "ナルト"
+		r := MapMediaToSearchResult(media)
+		if r.Title != "ナルト" {
+			t.Errorf("title: got %q, want ナルト", r.Title)
+		}
+		if r.ResultID != "40" {
+			t.Errorf("resultID: got %q, want 40", r.ResultID)
 		}
 	})
 }

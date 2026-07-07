@@ -46,7 +46,7 @@ func sampleMedia() *anilist.MediaFull {
 		Genres:          []string{"Action"},
 		IsAdult:         false,
 		CountryOfOrigin: "JP",
-		SiteUrl:         "https://anilist.co/manga/20",
+		SiteURL:         "https://anilist.co/manga/20",
 		Volumes:         ptrInt(72),
 		AverageScore:    ptrInt(84),
 	}

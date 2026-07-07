@@ -14,7 +14,7 @@ const maxQueryLength = 400
 
 // MediaFull represents the expanded AniList Media fields for full metadata retrieval.
 type MediaFull struct {
-	ID     int    `json:"id"`
+	ID     int64  `json:"id"`
 	Status string `json:"status"`
 	Title  struct {
 		Romaji  string `json:"romaji"`
@@ -52,7 +52,7 @@ type MediaFull struct {
 		Site string `json:"site"`
 		Type string `json:"type"`
 	} `json:"externalLinks"`
-	SiteUrl    string `json:"siteUrl"`
+	SiteURL    string `json:"siteUrl"`
 	CoverImage struct {
 		Large string `json:"large"`
 	} `json:"coverImage"`

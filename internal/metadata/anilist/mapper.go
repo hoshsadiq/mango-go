@@ -13,8 +13,10 @@ import (
 )
 
 var (
-	htmlTagRe    = regexp.MustCompile(`<[^>]*>`)
-	parenStripRe = regexp.MustCompile(`\s*\([^)]*\)\s*`)
+	blockTagRe     = regexp.MustCompile(`(?i)<\s*/?\s*(?:p|br|div|li|ul|ol|h[1-6])\s*/?\s*>`)
+	htmlTagRe      = regexp.MustCompile(`<[^>]*>`)
+	multiNewlineRe = regexp.MustCompile(`\n{2,}`)
+	parenStripRe   = regexp.MustCompile(`\s*\([^)]*\)\s*`)
 )
 
 // mapStatus converts an AniList status string to a SeriesStatus pointer.
@@ -188,17 +190,8 @@ func mapDate(year, month, day *int) (*int, *int, *int) {
 
 // mapLanguage derives a BCP-47 language tag from AniList's countryOfOrigin.
 func mapLanguage(countryOfOrigin string) *string {
-	var lang string
-	switch countryOfOrigin {
-	case "JP":
-		lang = "ja"
-	case "KR":
-		lang = "ko"
-	case "CN":
-		lang = "zh"
-	case "TW":
-		lang = "zh-TW"
-	default:
+	lang := nativeLanguage(countryOfOrigin)
+	if lang == "" {
 		return nil
 	}
 	return &lang
@@ -219,7 +212,7 @@ func mapLinksFromMedia(media anilist.MediaFull) []metadata.WebLink {
 	for _, el := range media.ExternalLinks {
 		links = append(links, metadata.WebLink{Label: el.Site, URL: el.URL})
 	}
-	links = append(links, metadata.WebLink{Label: "AniList", URL: media.SiteUrl})
+	links = append(links, metadata.WebLink{Label: "AniList", URL: media.SiteURL})
 	return links
 }
 
@@ -228,7 +221,9 @@ func mapDescription(raw string) *string {
 	if raw == "" {
 		return nil
 	}
-	cleaned := htmlTagRe.ReplaceAllString(raw, "")
+	cleaned := blockTagRe.ReplaceAllString(raw, "\n")
+	cleaned = htmlTagRe.ReplaceAllString(cleaned, "")
+	cleaned = multiNewlineRe.ReplaceAllString(cleaned, "\n")
 	cleaned = html.UnescapeString(cleaned)
 	cleaned = strings.TrimSpace(cleaned)
 	if cleaned == "" {
@@ -277,15 +272,11 @@ func MapMediaToSeriesMetadata(media anilist.MediaFull, excludeSpoilers bool) *me
 
 // MapMediaToSearchResult converts an AniList MediaFull to a SeriesSearchResult.
 func MapMediaToSearchResult(media anilist.MediaFull) metadata.SeriesSearchResult {
-	title := media.Title.English
-	if title == "" {
-		title = media.Title.Romaji
-	}
 	return metadata.SeriesSearchResult{
-		Title:        title,
+		Title:        canonicalTitle(media.Title.English, media.Title.Romaji, media.Title.Native),
 		ProviderName: "anilist",
-		ResultID:     strconv.Itoa(media.ID),
+		ResultID:     strconv.FormatInt(media.ID, 10),
 		ImageURL:     media.CoverImage.Large,
-		URL:          media.SiteUrl,
+		URL:          media.SiteURL,
 	}
 }

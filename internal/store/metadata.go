@@ -441,7 +441,7 @@ func (s *Store) GetProviderLink(folderID int64) (*ProviderLink, error) {
 	link := &ProviderLink{}
 	var createdAt string
 	err := s.db.QueryRow(
-		"SELECT folder_id, provider_name, provider_id, created_at FROM series_provider_link WHERE folder_id = ? LIMIT 1",
+		"SELECT folder_id, provider_name, provider_id, created_at FROM series_provider_link WHERE folder_id = ? ORDER BY provider_name LIMIT 1",
 		folderID,
 	).Scan(&link.FolderID, &link.ProviderName, &link.ProviderID, &createdAt)
 	if err != nil {
@@ -515,8 +515,18 @@ func (s *Store) UpdateMetadataField(folderID int64, field string, value interfac
 	}
 
 	query := fmt.Sprintf("UPDATE series_metadata SET %s = ?, %s = 1, updated_at = CURRENT_TIMESTAMP WHERE folder_id = ?", field, lockCol)
-	_, err := s.db.Exec(query, value, folderID)
-	return err
+	result, err := s.db.Exec(query, value, folderID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrMetadataNotFound
+	}
+	return nil
 }
 
 // ResetSeriesMetadata clears all metadata fields and locks for a folder
