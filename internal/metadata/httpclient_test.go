@@ -12,7 +12,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// TestRetryOn429 verifies that the client retries on 429 (Too Many Requests)
 func TestRetryOn429(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -46,7 +45,6 @@ func TestRetryOn429(t *testing.T) {
 	}
 }
 
-// TestRetryOn500 verifies that the client retries on 5xx errors
 func TestRetryOn500(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -80,7 +78,6 @@ func TestRetryOn500(t *testing.T) {
 	}
 }
 
-// TestExponentialBackoffTiming verifies that backoff delays increase exponentially
 func TestExponentialBackoffTiming(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -120,7 +117,6 @@ func TestExponentialBackoffTiming(t *testing.T) {
 	}
 }
 
-// TestRetryAfterHeader verifies that Retry-After header is respected
 func TestRetryAfterHeader(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -159,7 +155,6 @@ func TestRetryAfterHeader(t *testing.T) {
 	}
 }
 
-// TestMaxRetriesExhausted verifies that error is returned after max retries
 func TestMaxRetriesExhausted(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -186,7 +181,6 @@ func TestMaxRetriesExhausted(t *testing.T) {
 	}
 }
 
-// TestRateLimiterThrottles verifies that rate limiter throttles requests
 func TestRateLimiterThrottles(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -226,7 +220,6 @@ func TestRateLimiterThrottles(t *testing.T) {
 	}
 }
 
-// TestTimeoutNoRetry verifies that requests exceeding timeout are not retried
 func TestTimeoutNoRetry(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -261,7 +254,6 @@ func TestTimeoutNoRetry(t *testing.T) {
 	}
 }
 
-// TestRetryAfterParsingError verifies graceful handling of invalid Retry-After
 func TestRetryAfterParsingError(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -296,7 +288,6 @@ func TestRetryAfterParsingError(t *testing.T) {
 	}
 }
 
-// TestNoRetryOn200 verifies that successful responses are not retried
 func TestNoRetryOn200(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -326,7 +317,6 @@ func TestNoRetryOn200(t *testing.T) {
 	}
 }
 
-// TestNewAniListClient verifies the AniList convenience constructor produces a usable client.
 func TestNewAniListClient(t *testing.T) {
 	t.Parallel()
 	client := NewAniListClient()
@@ -354,7 +344,6 @@ func TestNewAniListClient(t *testing.T) {
 	}
 }
 
-// TestContextCancellation verifies that context cancellation is respected
 func TestContextCancellation(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -379,7 +368,6 @@ func TestContextCancellation(t *testing.T) {
 	}
 }
 
-// TestRetryOn502 verifies retry on 502 Bad Gateway
 func TestRetryOn502(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -412,7 +400,6 @@ func TestRetryOn502(t *testing.T) {
 	}
 }
 
-// TestRetryOn503 verifies retry on 503 Service Unavailable
 func TestRetryOn503(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -445,7 +432,6 @@ func TestRetryOn503(t *testing.T) {
 	}
 }
 
-// TestPostRetryPreservesBody verifies that POST request bodies are preserved across retries
 func TestPostRetryPreservesBody(t *testing.T) {
 	t.Parallel()
 	expectedBody := `{"query":"test query","variables":{"id":123}}`
@@ -490,7 +476,6 @@ func TestPostRetryPreservesBody(t *testing.T) {
 	}
 }
 
-// TestNoRetryOn4xx verifies that 4xx errors (except 429) are not retried
 func TestNoRetryOn4xx(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -519,7 +504,6 @@ func TestNoRetryOn4xx(t *testing.T) {
 	}
 }
 
-// TestRetryAfterWithZeroSeconds verifies Retry-After parsing with zero seconds
 func TestRetryAfterWithZeroSeconds(t *testing.T) {
 	t.Parallel()
 	requestCount := 0
@@ -553,7 +537,6 @@ func TestRetryAfterWithZeroSeconds(t *testing.T) {
 	}
 }
 
-// TestRateLimiterWithRetry verifies that rate limiter works with retries
 func TestRateLimiterWithRetry(t *testing.T) {
 	t.Parallel()
 	requestCount := 0

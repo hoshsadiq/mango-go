@@ -201,7 +201,6 @@ func TestServeReaderHTML(t *testing.T) {
 	server, _, _ := testutil.SetupTestServer(t)
 	router := server.Router()
 
-	// --- Get the expected content directly from the embedded source ---
 	// The path is now relative to the assets package's embed directive.
 	expectedFile, err := assets.WebFS.Open("web/reader.html")
 	if err != nil {
@@ -212,12 +211,10 @@ func TestServeReaderHTML(t *testing.T) {
 		t.Fatalf("Could not read embedded reader.html content: %v", err)
 	}
 
-	// --- Perform the request ---
 	req, _ := http.NewRequest("GET", "/reader/series/1/chapters/1", nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
-	// --- Assertions ---
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}

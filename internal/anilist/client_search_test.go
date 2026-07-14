@@ -346,8 +346,6 @@ func TestGetMediaFull_HTTPError(t *testing.T) {
 	}
 }
 
-// --- test helpers ---
-
 func assertEqual[T comparable](t *testing.T, name string, got, want T) {
 	t.Helper()
 	if got != want {

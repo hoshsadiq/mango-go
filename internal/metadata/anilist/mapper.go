@@ -1,25 +1,30 @@
 package anilist
 
 import (
-	"html"
 	"math"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"golang.org/x/net/html"
+
 	"github.com/vrsandeep/mango-go/internal/anilist"
 	"github.com/vrsandeep/mango-go/internal/metadata"
 )
 
 var (
-	blockTagRe     = regexp.MustCompile(`(?i)<\s*/?\s*(?:p|br|div|li|ul|ol|h[1-6])\s*/?\s*>`)
-	htmlTagRe      = regexp.MustCompile(`<[^>]*>`)
 	multiNewlineRe = regexp.MustCompile(`\n{2,}`)
 	parenStripRe   = regexp.MustCompile(`\s*\([^)]*\)\s*`)
+
+	descriptionBlockTags = map[string]bool{
+		"p": true, "br": true, "div": true,
+		"li": true, "ul": true, "ol": true,
+		"h1": true, "h2": true, "h3": true,
+		"h4": true, "h5": true, "h6": true,
+	}
 )
 
-// mapStatus converts an AniList status string to a SeriesStatus pointer.
 func mapStatus(raw string) *metadata.SeriesStatus {
 	switch raw {
 	case "FINISHED":
@@ -39,7 +44,6 @@ func mapStatus(raw string) *metadata.SeriesStatus {
 	}
 }
 
-// mapTitles builds SeriesTitle entries from AniList title fields.
 func mapTitles(romaji, english, native, countryOfOrigin string) []metadata.SeriesTitle {
 	var titles []metadata.SeriesTitle
 	if romaji != "" {
@@ -92,8 +96,6 @@ func canonicalTitle(english, romaji, native string) string {
 	return native
 }
 
-// mapRoleToAuthorRoles maps a cleaned AniList role string to AuthorRole(s).
-// Returns nil for unknown roles (silently dropped).
 func mapRoleToAuthorRoles(role string) []metadata.AuthorRole {
 	lower := strings.ToLower(role)
 	switch lower {
@@ -104,7 +106,7 @@ func mapRoleToAuthorRoles(role string) []metadata.AuthorRole {
 	case "art", "illustration":
 		return []metadata.AuthorRole{metadata.AuthorRolePenciller}
 	default:
-		return nil
+		return []metadata.AuthorRole{metadata.AuthorRoleOther}
 	}
 }
 
@@ -174,18 +176,14 @@ func mapTagsFromMedia(media anilist.MediaFull, excludeSpoilers bool) []string {
 	return result
 }
 
-// mapScore converts AniList's 0-100 int score to a 0-10 float64, rounded to 1 decimal.
 func mapScore(avg *int) *float64 {
 	if avg == nil {
 		return nil
 	}
-	// AniList scores are 0-100; divide by 10 for 0-10 scale.
-	// math.Round preserves 1-decimal precision for non-integer inputs.
 	v := math.Round(float64(*avg)/10.0*10) / 10
 	return &v
 }
 
-// mapDate passes through date components independently.
 func mapDate(year, month, day *int) (*int, *int, *int) {
 	return year, month, day
 }
@@ -199,7 +197,6 @@ func mapLanguage(countryOfOrigin string) *string {
 	return &lang
 }
 
-// mapAgeRating converts AniList's isAdult boolean to an age rating pointer.
 func mapAgeRating(isAdult bool) *int {
 	if isAdult {
 		v := 18
@@ -218,15 +215,30 @@ func mapLinksFromMedia(media anilist.MediaFull) []metadata.WebLink {
 	return links
 }
 
-// mapDescription strips HTML tags and unescapes entities from AniList descriptions.
 func mapDescription(raw string) *string {
 	if raw == "" {
 		return nil
 	}
-	cleaned := blockTagRe.ReplaceAllString(raw, "\n")
-	cleaned = htmlTagRe.ReplaceAllString(cleaned, "")
-	cleaned = multiNewlineRe.ReplaceAllString(cleaned, "\n")
-	cleaned = html.UnescapeString(cleaned)
+
+	var sb strings.Builder
+	z := html.NewTokenizer(strings.NewReader(raw))
+	for {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			break
+		}
+		switch tt {
+		case html.TextToken:
+			sb.Write(z.Text())
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			tn, _ := z.TagName()
+			if descriptionBlockTags[string(tn)] {
+				sb.WriteByte('\n')
+			}
+		}
+	}
+
+	cleaned := multiNewlineRe.ReplaceAllString(sb.String(), "\n")
 	cleaned = strings.TrimSpace(cleaned)
 	if cleaned == "" {
 		return nil
@@ -234,7 +246,6 @@ func mapDescription(raw string) *string {
 	return &cleaned
 }
 
-// mapCover returns a pointer to the cover URL, or nil if empty.
 func mapCover(large string) *string {
 	if large == "" {
 		return nil
@@ -242,7 +253,6 @@ func mapCover(large string) *string {
 	return &large
 }
 
-// MapMediaToSeriesMetadata converts an AniList MediaFull to a SeriesMetadata.
 func MapMediaToSeriesMetadata(media anilist.MediaFull, excludeSpoilers bool) *metadata.SeriesMetadata {
 	title := canonicalTitle(media.Title.English, media.Title.Romaji, media.Title.Native)
 	releaseYear, releaseMonth, releaseDay := mapDate(media.StartDate.Year, media.StartDate.Month, media.StartDate.Day)
@@ -272,7 +282,6 @@ func MapMediaToSeriesMetadata(media anilist.MediaFull, excludeSpoilers bool) *me
 	return m
 }
 
-// MapMediaToSearchResult converts an AniList MediaFull to a SeriesSearchResult.
 func MapMediaToSearchResult(media anilist.MediaFull) metadata.SeriesSearchResult {
 	return metadata.SeriesSearchResult{
 		Title:        canonicalTitle(media.Title.English, media.Title.Romaji, media.Title.Native),

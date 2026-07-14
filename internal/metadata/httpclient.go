@@ -19,38 +19,32 @@ type RetryClient struct {
 	rateLimiter    *rate.Limiter
 }
 
-// Option is a functional option for configuring RetryClient.
 type Option func(*RetryClient)
 
-// WithMaxRetries sets the maximum number of retries.
 func WithMaxRetries(maxRetries int) Option {
 	return func(rc *RetryClient) {
 		rc.maxRetries = maxRetries
 	}
 }
 
-// WithInitialBackoff sets the initial backoff duration.
 func WithInitialBackoff(backoff time.Duration) Option {
 	return func(rc *RetryClient) {
 		rc.initialBackoff = backoff
 	}
 }
 
-// WithRateLimiter sets the rate limiter.
 func WithRateLimiter(limiter *rate.Limiter) Option {
 	return func(rc *RetryClient) {
 		rc.rateLimiter = limiter
 	}
 }
 
-// WithHTTPClient sets the underlying HTTP client.
 func WithHTTPClient(client *http.Client) Option {
 	return func(rc *RetryClient) {
 		rc.client = client
 	}
 }
 
-// NewRetryClient creates a new RetryClient with the given options.
 func NewRetryClient(opts ...Option) *RetryClient {
 	rc := &RetryClient{
 		client:         &http.Client{},
@@ -79,10 +73,8 @@ func NewAniListClient() *RetryClient {
 	)
 }
 
-// Do executes an HTTP request with retry logic, exponential backoff, and rate limiting.
-// It retries on HTTP 429 (Too Many Requests) and 5xx errors.
-// It respects the Retry-After header if present.
-// It does not retry on timeout errors.
+// Do executes the request with retries on 429 and 5xx, exponential backoff,
+// and Retry-After support. Timeout errors are not retried.
 func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	backoff := rc.initialBackoff
@@ -171,7 +163,6 @@ func (rc *RetryClient) Do(req *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("unexpected: exhausted retries without returning")
 }
 
-// isRetryableStatus returns true if the HTTP status code should trigger a retry.
 func isRetryableStatus(statusCode int) bool {
 	return statusCode == http.StatusTooManyRequests || (statusCode >= 500 && statusCode < 600)
 }

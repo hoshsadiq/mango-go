@@ -54,8 +54,6 @@ func sampleMedia() *anilist.MediaFull {
 	}
 }
 
-// --- Name ---
-
 func TestProviderName(t *testing.T) {
 	t.Parallel()
 	p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
@@ -63,8 +61,6 @@ func TestProviderName(t *testing.T) {
 		t.Errorf("Name() = %q, want anilist", p.Name())
 	}
 }
-
-// --- GetSeriesMetadata ---
 
 func TestGetSeriesMetadata(t *testing.T) {
 	t.Parallel()
@@ -115,8 +111,6 @@ func TestGetSeriesMetadata(t *testing.T) {
 		}
 	})
 }
-
-// --- GetSeriesCover ---
 
 func TestGetSeriesCover(t *testing.T) {
 	t.Parallel()
@@ -189,8 +183,6 @@ func TestGetSeriesCover(t *testing.T) {
 	})
 }
 
-// --- GetBookMetadata ---
-
 func TestGetBookMetadataNotSupported(t *testing.T) {
 	t.Parallel()
 	p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
@@ -203,8 +195,6 @@ func TestGetBookMetadataNotSupported(t *testing.T) {
 	}
 }
 
-// --- MatchSeries ---
-
 func TestMatchSeriesNotSupported(t *testing.T) {
 	t.Parallel()
 	p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
@@ -216,8 +206,6 @@ func TestMatchSeriesNotSupported(t *testing.T) {
 		t.Error("expected nil result")
 	}
 }
-
-// --- SearchSeries ---
 
 func TestSearchSeries(t *testing.T) {
 	t.Parallel()
@@ -404,7 +392,5 @@ func TestSearchSeries(t *testing.T) {
 		}
 	})
 }
-
-// --- Compile-time interface check ---
 
 var _ metadata.MetadataProvider = (*AniListProvider)(nil)

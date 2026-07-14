@@ -250,7 +250,6 @@ func (s *Store) ListItems(opts ListItemsOptions) (*models.Folder, []*models.Fold
 		}
 		currentFolder = f
 	}
-	// --- Build dynamic query parts ---
 	var folderWhere, chapterWhere, tagJoin string
 	var folderArgs, chapterArgs []interface{}
 

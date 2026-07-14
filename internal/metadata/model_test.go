@@ -160,6 +160,7 @@ func TestAuthorRoleConstants(t *testing.T) {
 		{AuthorRoleCoverArtist, "COVER_ARTIST"},
 		{AuthorRoleEditor, "EDITOR"},
 		{AuthorRoleTranslator, "TRANSLATOR"},
+		{AuthorRoleOther, "OTHER"},
 	}
 
 	for _, tt := range tests {

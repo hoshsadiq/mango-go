@@ -9,8 +9,6 @@ import (
 
 func ptrTo[T any](v T) *T { return &v }
 
-// --- mapStatus ---
-
 func TestMapStatus(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -43,8 +41,6 @@ func TestMapStatus(t *testing.T) {
 		})
 	}
 }
-
-// --- mapTitles ---
 
 func TestMapTitles(t *testing.T) {
 	t.Parallel()
@@ -108,8 +104,6 @@ func assertTitle(t *testing.T, got metadata.SeriesTitle, title, typ, lang string
 	}
 }
 
-// --- canonicalTitle ---
-
 func TestCanonicalTitle(t *testing.T) {
 	t.Parallel()
 	t.Run("prefers English", func(t *testing.T) {
@@ -140,8 +134,6 @@ func TestCanonicalTitle(t *testing.T) {
 		}
 	})
 }
-
-// --- mapAuthorsFromMedia ---
 
 func TestMapAuthorsFromMedia(t *testing.T) {
 	t.Parallel()
@@ -230,15 +222,16 @@ func TestMapAuthorsFromMedia(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown roles silently dropped", func(t *testing.T) {
+	t.Run("unknown roles mapped to OTHER", func(t *testing.T) {
 		authors := mapAuthorsFromMedia(makeMedia(
 			rn("Director", "D"),
-			rn("Editor", "E"),
 			rn("Character Design", "CD"),
 		))
-		if len(authors) != 0 {
-			t.Fatalf("got %d authors, want 0 (all unknown roles)", len(authors))
+		if len(authors) != 2 {
+			t.Fatalf("got %d authors, want 2", len(authors))
 		}
+		assertAuthor(t, authors[0], "D", metadata.AuthorRoleOther)
+		assertAuthor(t, authors[1], "CD", metadata.AuthorRoleOther)
 	})
 
 	t.Run("dedup identical name+role pairs", func(t *testing.T) {
@@ -268,8 +261,6 @@ func assertAuthor(t *testing.T, got metadata.Author, name string, role metadata.
 		t.Errorf("got {%q, %q}, want {%q, %q}", got.Name, got.Role, name, role)
 	}
 }
-
-// --- mapTagsFromMedia ---
 
 func TestMapTagsFromMedia(t *testing.T) {
 	t.Parallel()
@@ -382,8 +373,6 @@ func TestMapTagsFromMedia(t *testing.T) {
 	})
 }
 
-// --- mapScore ---
-
 func TestMapScore(t *testing.T) {
 	t.Parallel()
 	t.Run("nil returns nil", func(t *testing.T) {
@@ -433,8 +422,6 @@ func TestMapScore(t *testing.T) {
 	})
 }
 
-// --- mapDate ---
-
 func TestMapDate(t *testing.T) {
 	t.Parallel()
 	t.Run("all present", func(t *testing.T) {
@@ -482,8 +469,6 @@ func assertIntPtr(t *testing.T, got *int, want int, label string) {
 	}
 }
 
-// --- mapLanguage ---
-
 func TestMapLanguage(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -516,8 +501,6 @@ func TestMapLanguage(t *testing.T) {
 	}
 }
 
-// --- mapAgeRating ---
-
 func TestMapAgeRating(t *testing.T) {
 	t.Parallel()
 	t.Run("adult true returns 18", func(t *testing.T) {
@@ -537,8 +520,6 @@ func TestMapAgeRating(t *testing.T) {
 		}
 	})
 }
-
-// --- mapLinksFromMedia ---
 
 func TestMapLinksFromMedia(t *testing.T) {
 	t.Parallel()
@@ -575,8 +556,6 @@ func TestMapLinksFromMedia(t *testing.T) {
 		}
 	})
 }
-
-// --- mapDescription ---
 
 func TestMapDescription(t *testing.T) {
 	t.Parallel()
@@ -625,8 +604,6 @@ func TestMapDescription(t *testing.T) {
 	})
 }
 
-// --- mapCover ---
-
 func TestMapCover(t *testing.T) {
 	t.Parallel()
 	t.Run("non-empty returns pointer", func(t *testing.T) {
@@ -646,8 +623,6 @@ func TestMapCover(t *testing.T) {
 		}
 	})
 }
-
-// --- MapMediaToSeriesMetadata (integration) ---
 
 func TestMapMediaToSeriesMetadata(t *testing.T) {
 	t.Parallel()
@@ -740,8 +715,6 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		t.Errorf("thumbnailURL: got %v", result.ThumbnailURL)
 	}
 }
-
-// --- MapMediaToSearchResult ---
 
 func TestMapMediaToSearchResult(t *testing.T) {
 	t.Parallel()
