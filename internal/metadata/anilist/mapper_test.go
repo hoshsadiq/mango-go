@@ -7,20 +7,20 @@ import (
 	"github.com/vrsandeep/mango-go/internal/metadata"
 )
 
-func ptrInt(v int) *int       { return &v }
-func ptrStr(v string) *string { return &v }
+func ptrTo[T any](v T) *T { return &v }
 
 // --- mapStatus ---
 
 func TestMapStatus(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  *metadata.SeriesStatus
 	}{
-		{"FINISHED", statusPtr(metadata.SeriesStatusCompleted)},
-		{"RELEASING", statusPtr(metadata.SeriesStatusOngoing)},
-		{"CANCELLED", statusPtr(metadata.SeriesStatusAbandoned)},
-		{"HIATUS", statusPtr(metadata.SeriesStatusHiatus)},
+		{"FINISHED", ptrTo(metadata.SeriesStatusCompleted)},
+		{"RELEASING", ptrTo(metadata.SeriesStatusOngoing)},
+		{"CANCELLED", ptrTo(metadata.SeriesStatusAbandoned)},
+		{"HIATUS", ptrTo(metadata.SeriesStatusHiatus)},
 		{"NOT_YET_RELEASED", nil},
 		{"UNKNOWN_VALUE", nil},
 		{"", nil},
@@ -44,11 +44,10 @@ func TestMapStatus(t *testing.T) {
 	}
 }
 
-func statusPtr(s metadata.SeriesStatus) *metadata.SeriesStatus { return &s }
-
 // --- mapTitles ---
 
 func TestMapTitles(t *testing.T) {
+	t.Parallel()
 	t.Run("all three populated JP origin", func(t *testing.T) {
 		titles := mapTitles("Naruto", "Naruto", "ナルト", "JP")
 		if len(titles) != 3 {
@@ -112,6 +111,7 @@ func assertTitle(t *testing.T, got metadata.SeriesTitle, title, typ, lang string
 // --- canonicalTitle ---
 
 func TestCanonicalTitle(t *testing.T) {
+	t.Parallel()
 	t.Run("prefers English", func(t *testing.T) {
 		got := canonicalTitle("English", "Romaji", "Native")
 		if got != "English" {
@@ -144,20 +144,16 @@ func TestCanonicalTitle(t *testing.T) {
 // --- mapAuthorsFromMedia ---
 
 func TestMapAuthorsFromMedia(t *testing.T) {
+	t.Parallel()
 	makeMedia := func(edges ...struct{ role, name string }) anilist.MediaFull {
 		var m anilist.MediaFull
 		for _, e := range edges {
-			edge := struct {
-				Role string `json:"role"`
-				Node struct {
-					Name struct {
-						Full string `json:"full"`
-					} `json:"name"`
-				} `json:"node"`
-			}{}
-			edge.Role = e.role
-			edge.Node.Name.Full = e.name
-			m.Staff.Edges = append(m.Staff.Edges, edge)
+			m.Staff.Edges = append(m.Staff.Edges, anilist.MediaStaffEdge{
+				Role: e.role,
+				Node: anilist.MediaStaffNode{
+					Name: anilist.MediaStaffName{Full: e.name},
+				},
+			})
 		}
 		return m
 	}
@@ -276,6 +272,7 @@ func assertAuthor(t *testing.T, got metadata.Author, name string, role metadata.
 // --- mapTagsFromMedia ---
 
 func TestMapTagsFromMedia(t *testing.T) {
+	t.Parallel()
 	makeMedia := func(tags ...struct {
 		name    string
 		rank    *int
@@ -283,11 +280,7 @@ func TestMapTagsFromMedia(t *testing.T) {
 	}) anilist.MediaFull {
 		var m anilist.MediaFull
 		for _, tg := range tags {
-			m.Tags = append(m.Tags, struct {
-				Name           string `json:"name"`
-				Rank           *int   `json:"rank"`
-				IsMediaSpoiler bool   `json:"isMediaSpoiler"`
-			}{Name: tg.name, Rank: tg.rank, IsMediaSpoiler: tg.spoiler})
+			m.Tags = append(m.Tags, anilist.MediaTag{Name: tg.name, Rank: tg.rank, IsMediaSpoiler: tg.spoiler})
 		}
 		return m
 	}
@@ -306,9 +299,9 @@ func TestMapTagsFromMedia(t *testing.T) {
 
 	t.Run("filters by rank >= 60", func(t *testing.T) {
 		m := makeMedia(
-			tag("Action", ptrInt(90), false),
-			tag("Low", ptrInt(59), false),
-			tag("Threshold", ptrInt(60), false),
+			tag("Action", ptrTo(90), false),
+			tag("Low", ptrTo(59), false),
+			tag("Threshold", ptrTo(60), false),
 		)
 		result := mapTagsFromMedia(m, false)
 		if len(result) != 2 {
@@ -322,7 +315,7 @@ func TestMapTagsFromMedia(t *testing.T) {
 	t.Run("drops nil rank", func(t *testing.T) {
 		m := makeMedia(
 			tag("NoRank", nil, false),
-			tag("HasRank", ptrInt(80), false),
+			tag("HasRank", ptrTo(80), false),
 		)
 		result := mapTagsFromMedia(m, false)
 		if len(result) != 1 {
@@ -335,8 +328,8 @@ func TestMapTagsFromMedia(t *testing.T) {
 
 	t.Run("excludes spoilers when configured", func(t *testing.T) {
 		m := makeMedia(
-			tag("Action", ptrInt(90), false),
-			tag("PlotTwist", ptrInt(80), true),
+			tag("Action", ptrTo(90), false),
+			tag("PlotTwist", ptrTo(80), true),
 		)
 		result := mapTagsFromMedia(m, true)
 		if len(result) != 1 {
@@ -349,8 +342,8 @@ func TestMapTagsFromMedia(t *testing.T) {
 
 	t.Run("includes spoilers when not configured", func(t *testing.T) {
 		m := makeMedia(
-			tag("Action", ptrInt(90), false),
-			tag("PlotTwist", ptrInt(80), true),
+			tag("Action", ptrTo(90), false),
+			tag("PlotTwist", ptrTo(80), true),
 		)
 		result := mapTagsFromMedia(m, false)
 		if len(result) != 2 {
@@ -365,7 +358,7 @@ func TestMapTagsFromMedia(t *testing.T) {
 			spoiler bool
 		}
 		for i := 0; i < 20; i++ {
-			tags = append(tags, tag("Tag"+string(rune('A'+i)), ptrInt(60+i), false))
+			tags = append(tags, tag("Tag"+string(rune('A'+i)), ptrTo(60+i), false))
 		}
 		m := makeMedia(tags...)
 		result := mapTagsFromMedia(m, false)
@@ -392,6 +385,7 @@ func TestMapTagsFromMedia(t *testing.T) {
 // --- mapScore ---
 
 func TestMapScore(t *testing.T) {
+	t.Parallel()
 	t.Run("nil returns nil", func(t *testing.T) {
 		if got := mapScore(nil); got != nil {
 			t.Errorf("got %v, want nil", *got)
@@ -399,7 +393,7 @@ func TestMapScore(t *testing.T) {
 	})
 
 	t.Run("84 becomes 8.4", func(t *testing.T) {
-		got := mapScore(ptrInt(84))
+		got := mapScore(ptrTo(84))
 		if got == nil {
 			t.Fatal("got nil, want 8.4")
 		}
@@ -409,7 +403,7 @@ func TestMapScore(t *testing.T) {
 	})
 
 	t.Run("0 becomes 0.0", func(t *testing.T) {
-		got := mapScore(ptrInt(0))
+		got := mapScore(ptrTo(0))
 		if got == nil {
 			t.Fatal("got nil, want 0.0")
 		}
@@ -419,7 +413,7 @@ func TestMapScore(t *testing.T) {
 	})
 
 	t.Run("100 becomes 10.0", func(t *testing.T) {
-		got := mapScore(ptrInt(100))
+		got := mapScore(ptrTo(100))
 		if got == nil {
 			t.Fatal("got nil, want 10.0")
 		}
@@ -429,7 +423,7 @@ func TestMapScore(t *testing.T) {
 	})
 
 	t.Run("73 becomes 7.3", func(t *testing.T) {
-		got := mapScore(ptrInt(73))
+		got := mapScore(ptrTo(73))
 		if got == nil {
 			t.Fatal("got nil, want 7.3")
 		}
@@ -442,15 +436,16 @@ func TestMapScore(t *testing.T) {
 // --- mapDate ---
 
 func TestMapDate(t *testing.T) {
+	t.Parallel()
 	t.Run("all present", func(t *testing.T) {
-		y, m, d := mapDate(ptrInt(1999), ptrInt(9), ptrInt(21))
+		y, m, d := mapDate(ptrTo(1999), ptrTo(9), ptrTo(21))
 		assertIntPtr(t, y, 1999, "year")
 		assertIntPtr(t, m, 9, "month")
 		assertIntPtr(t, d, 21, "day")
 	})
 
 	t.Run("year only", func(t *testing.T) {
-		y, m, d := mapDate(ptrInt(2020), nil, nil)
+		y, m, d := mapDate(ptrTo(2020), nil, nil)
 		assertIntPtr(t, y, 2020, "year")
 		if m != nil {
 			t.Error("month should be nil")
@@ -468,7 +463,7 @@ func TestMapDate(t *testing.T) {
 	})
 
 	t.Run("partial month+day without year", func(t *testing.T) {
-		y, m, d := mapDate(nil, ptrInt(3), ptrInt(15))
+		y, m, d := mapDate(nil, ptrTo(3), ptrTo(15))
 		if y != nil {
 			t.Error("year should be nil")
 		}
@@ -490,14 +485,15 @@ func assertIntPtr(t *testing.T, got *int, want int, label string) {
 // --- mapLanguage ---
 
 func TestMapLanguage(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  *string
 	}{
-		{"JP", ptrStr("ja")},
-		{"KR", ptrStr("ko")},
-		{"CN", ptrStr("zh")},
-		{"TW", ptrStr("zh-TW")},
+		{"JP", ptrTo("ja")},
+		{"KR", ptrTo("ko")},
+		{"CN", ptrTo("zh")},
+		{"TW", ptrTo("zh-TW")},
 		{"US", nil},
 		{"", nil},
 	}
@@ -523,6 +519,7 @@ func TestMapLanguage(t *testing.T) {
 // --- mapAgeRating ---
 
 func TestMapAgeRating(t *testing.T) {
+	t.Parallel()
 	t.Run("adult true returns 18", func(t *testing.T) {
 		got := mapAgeRating(true)
 		if got == nil {
@@ -544,19 +541,12 @@ func TestMapAgeRating(t *testing.T) {
 // --- mapLinksFromMedia ---
 
 func TestMapLinksFromMedia(t *testing.T) {
+	t.Parallel()
 	t.Run("maps external links and appends AniList", func(t *testing.T) {
 		var m anilist.MediaFull
 		m.SiteURL = "https://anilist.co/manga/20"
-		m.ExternalLinks = append(m.ExternalLinks, struct {
-			URL  string `json:"url"`
-			Site string `json:"site"`
-			Type string `json:"type"`
-		}{URL: "https://mal.net/123", Site: "MyAnimeList", Type: "INFO"})
-		m.ExternalLinks = append(m.ExternalLinks, struct {
-			URL  string `json:"url"`
-			Site string `json:"site"`
-			Type string `json:"type"`
-		}{URL: "https://mangadex.org/title/abc", Site: "MangaDex", Type: "READING"})
+		m.ExternalLinks = append(m.ExternalLinks, anilist.MediaExternalLink{URL: "https://mal.net/123", Site: "MyAnimeList", Type: "INFO"})
+		m.ExternalLinks = append(m.ExternalLinks, anilist.MediaExternalLink{URL: "https://mangadex.org/title/abc", Site: "MangaDex", Type: "READING"})
 
 		links := mapLinksFromMedia(m)
 		if len(links) != 3 {
@@ -589,6 +579,7 @@ func TestMapLinksFromMedia(t *testing.T) {
 // --- mapDescription ---
 
 func TestMapDescription(t *testing.T) {
+	t.Parallel()
 	t.Run("strips HTML tags", func(t *testing.T) {
 		got := mapDescription("<br>A ninja story<br/>")
 		if got == nil {
@@ -637,6 +628,7 @@ func TestMapDescription(t *testing.T) {
 // --- mapCover ---
 
 func TestMapCover(t *testing.T) {
+	t.Parallel()
 	t.Run("non-empty returns pointer", func(t *testing.T) {
 		got := mapCover("https://img.anilist.co/cover.jpg")
 		if got == nil {
@@ -658,6 +650,7 @@ func TestMapCover(t *testing.T) {
 // --- MapMediaToSeriesMetadata (integration) ---
 
 func TestMapMediaToSeriesMetadata(t *testing.T) {
+	t.Parallel()
 	media := anilist.MediaFull{
 		ID:              20,
 		Status:          "FINISHED",
@@ -666,35 +659,18 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 		IsAdult:         false,
 		CountryOfOrigin: "JP",
 		SiteURL:         "https://anilist.co/manga/20",
-		Volumes:         ptrInt(72),
-		AverageScore:    ptrInt(84),
+		Volumes:         ptrTo(72),
+		AverageScore:    ptrTo(84),
 	}
-	media.Title.Romaji = "NARUTO"
-	media.Title.English = "Naruto"
-	media.Title.Native = "ナルト"
-	media.Tags = append(media.Tags, struct {
-		Name           string `json:"name"`
-		Rank           *int   `json:"rank"`
-		IsMediaSpoiler bool   `json:"isMediaSpoiler"`
-	}{Name: "Shounen", Rank: ptrInt(85), IsMediaSpoiler: false})
-	media.Staff.Edges = append(media.Staff.Edges, struct {
-		Role string `json:"role"`
-		Node struct {
-			Name struct {
-				Full string `json:"full"`
-			} `json:"name"`
-		} `json:"node"`
-	}{Role: "Story & Art"})
-	media.Staff.Edges[0].Node.Name.Full = "Masashi Kishimoto"
-	media.StartDate.Year = ptrInt(1999)
-	media.StartDate.Month = ptrInt(9)
-	media.StartDate.Day = ptrInt(21)
-	media.CoverImage.Large = "https://img.anilist.co/naruto.jpg"
-	media.ExternalLinks = append(media.ExternalLinks, struct {
-		URL  string `json:"url"`
-		Site string `json:"site"`
-		Type string `json:"type"`
-	}{URL: "https://mal.net/20", Site: "MyAnimeList", Type: "INFO"})
+	media.Title = anilist.MediaTitle{Romaji: "NARUTO", English: "Naruto", Native: "ナルト"}
+	media.Tags = []anilist.MediaTag{{Name: "Shounen", Rank: ptrTo(85), IsMediaSpoiler: false}}
+	media.Staff = anilist.MediaStaff{Edges: []anilist.MediaStaffEdge{{
+		Role: "Story & Art",
+		Node: anilist.MediaStaffNode{Name: anilist.MediaStaffName{Full: "Masashi Kishimoto"}},
+	}}}
+	media.StartDate = anilist.MediaDate{Year: ptrTo(1999), Month: ptrTo(9), Day: ptrTo(21)}
+	media.CoverImage = anilist.MediaCoverImage{Large: "https://img.anilist.co/naruto.jpg"}
+	media.ExternalLinks = []anilist.MediaExternalLink{{URL: "https://mal.net/20", Site: "MyAnimeList", Type: "INFO"}}
 
 	result := MapMediaToSeriesMetadata(media, true)
 	if result == nil {
@@ -768,6 +744,7 @@ func TestMapMediaToSeriesMetadata(t *testing.T) {
 // --- MapMediaToSearchResult ---
 
 func TestMapMediaToSearchResult(t *testing.T) {
+	t.Parallel()
 	t.Run("uses English title when available", func(t *testing.T) {
 		media := anilist.MediaFull{ID: 20, SiteURL: "https://anilist.co/manga/20"}
 		media.Title.English = "Naruto"

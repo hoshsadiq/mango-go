@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/vrsandeep/mango-go/internal/anilist"
 	"github.com/vrsandeep/mango-go/internal/metadata"
@@ -79,6 +80,7 @@ const sampleSearchResponse = `{
 }`
 
 func TestSearchMediaFull_ParsesResults(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(sampleSearchResponse))
@@ -133,6 +135,7 @@ func TestSearchMediaFull_ParsesResults(t *testing.T) {
 }
 
 func TestSearchMediaFull_EmptyResults(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data": {"Page": {"media": []}}}`))
@@ -151,6 +154,7 @@ func TestSearchMediaFull_EmptyResults(t *testing.T) {
 }
 
 func TestSearchMediaFull_NullMediaReturnsEmptySlice(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data": {"Page": {"media": null}}}`))
@@ -166,32 +170,45 @@ func TestSearchMediaFull_NullMediaReturnsEmptySlice(t *testing.T) {
 }
 
 func TestSearchMediaFull_QueryTruncation(t *testing.T) {
-	var receivedSearch string
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var req struct {
-			Variables struct {
-				Search string `json:"search"`
-			} `json:"variables"`
-		}
-		json.Unmarshal(body, &req)
-		receivedSearch = req.Variables.Search
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"data": {"Page": {"media": []}}}`))
-	})
-
-	longQuery := strings.Repeat("a", 500)
-	_, err := client.SearchMediaFull(context.Background(), longQuery, 10)
-	if err != nil {
-		t.Fatalf("SearchMediaFull: %v", err)
+	t.Parallel()
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"ASCII", strings.Repeat("a", 500)},
+		{"CJK", strings.Repeat("漫", 500)},
 	}
-	if len(receivedSearch) != 400 {
-		t.Errorf("received query length = %d, want 400", len(receivedSearch))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var receivedSearch string
+			client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				var req struct {
+					Variables struct {
+						Search string `json:"search"`
+					} `json:"variables"`
+				}
+				json.Unmarshal(body, &req)
+				receivedSearch = req.Variables.Search
+
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"data": {"Page": {"media": []}}}`))
+			})
+
+			_, err := client.SearchMediaFull(context.Background(), tt.query, 10)
+			if err != nil {
+				t.Fatalf("SearchMediaFull: %v", err)
+			}
+			if got := utf8.RuneCountInString(receivedSearch); got != 400 {
+				t.Errorf("received query rune count = %d, want 400", got)
+			}
+		})
 	}
 }
 
 func TestSearchMediaFull_ShortQueryNotTruncated(t *testing.T) {
+	t.Parallel()
 	var receivedSearch string
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -215,6 +232,7 @@ func TestSearchMediaFull_ShortQueryNotTruncated(t *testing.T) {
 }
 
 func TestSearchMediaFull_GraphQLError(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errors": [{"message": "validation failed"}]}`))
@@ -230,6 +248,7 @@ func TestSearchMediaFull_GraphQLError(t *testing.T) {
 }
 
 func TestSearchMediaFull_HTTPError(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
@@ -241,6 +260,7 @@ func TestSearchMediaFull_HTTPError(t *testing.T) {
 }
 
 func TestGetMediaFull_ParsesSingleResult(t *testing.T) {
+	t.Parallel()
 	response := `{
 	  "data": {
 	    "Media": {
@@ -286,6 +306,7 @@ func TestGetMediaFull_ParsesSingleResult(t *testing.T) {
 }
 
 func TestGetMediaFull_GraphQLError(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errors": [{"message": "not found"}]}`))
@@ -301,6 +322,7 @@ func TestGetMediaFull_GraphQLError(t *testing.T) {
 }
 
 func TestGetMediaFull_NullDataReturnsError(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data": {"Media": null}}`))
@@ -313,6 +335,7 @@ func TestGetMediaFull_NullDataReturnsError(t *testing.T) {
 }
 
 func TestGetMediaFull_HTTPError(t *testing.T) {
+	t.Parallel()
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})

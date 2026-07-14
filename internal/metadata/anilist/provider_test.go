@@ -39,7 +39,7 @@ func (m *mockAniListClient) SearchMediaFull(ctx context.Context, query string, l
 }
 
 func sampleMedia() *anilist.MediaFull {
-	m := &anilist.MediaFull{
+	return &anilist.MediaFull{
 		ID:              20,
 		Status:          "FINISHED",
 		Description:     "A ninja story",
@@ -47,19 +47,18 @@ func sampleMedia() *anilist.MediaFull {
 		IsAdult:         false,
 		CountryOfOrigin: "JP",
 		SiteURL:         "https://anilist.co/manga/20",
-		Volumes:         ptrInt(72),
-		AverageScore:    ptrInt(84),
+		Volumes:         ptrTo(72),
+		AverageScore:    ptrTo(84),
+		Title:           anilist.MediaTitle{English: "Naruto", Romaji: "NARUTO"},
+		CoverImage:      anilist.MediaCoverImage{Large: "https://img.anilist.co/naruto.jpg"},
 	}
-	m.Title.English = "Naruto"
-	m.Title.Romaji = "NARUTO"
-	m.CoverImage.Large = "https://img.anilist.co/naruto.jpg"
-	return m
 }
 
 // --- Name ---
 
 func TestProviderName(t *testing.T) {
-	p := NewAniListProvider(&mockAniListClient{}, false, "ignore")
+	t.Parallel()
+	p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
 	if p.Name() != "anilist" {
 		t.Errorf("Name() = %q, want anilist", p.Name())
 	}
@@ -68,6 +67,7 @@ func TestProviderName(t *testing.T) {
 // --- GetSeriesMetadata ---
 
 func TestGetSeriesMetadata(t *testing.T) {
+	t.Parallel()
 	t.Run("successful fetch and mapping", func(t *testing.T) {
 		media := sampleMedia()
 		client := &mockAniListClient{
@@ -78,7 +78,7 @@ func TestGetSeriesMetadata(t *testing.T) {
 				return media, nil
 			},
 		}
-		p := NewAniListProvider(client, true, "ignore")
+		p := NewAniListProvider(client, true, CoverFailureModeIgnore)
 		result, err := p.GetSeriesMetadata(context.Background(), "20")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -95,7 +95,7 @@ func TestGetSeriesMetadata(t *testing.T) {
 	})
 
 	t.Run("invalid series ID returns error", func(t *testing.T) {
-		p := NewAniListProvider(&mockAniListClient{}, false, "ignore")
+		p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
 		_, err := p.GetSeriesMetadata(context.Background(), "not-a-number")
 		if err == nil {
 			t.Fatal("expected error for invalid ID")
@@ -108,7 +108,7 @@ func TestGetSeriesMetadata(t *testing.T) {
 				return nil, errors.New("api error")
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		_, err := p.GetSeriesMetadata(context.Background(), "20")
 		if err == nil {
 			t.Fatal("expected error")
@@ -119,6 +119,7 @@ func TestGetSeriesMetadata(t *testing.T) {
 // --- GetSeriesCover ---
 
 func TestGetSeriesCover(t *testing.T) {
+	t.Parallel()
 	t.Run("successful cover fetch", func(t *testing.T) {
 		media := sampleMedia()
 		client := &mockAniListClient{
@@ -126,7 +127,7 @@ func TestGetSeriesCover(t *testing.T) {
 				return media, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		cover, err := p.GetSeriesCover(context.Background(), "20")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -142,7 +143,7 @@ func TestGetSeriesCover(t *testing.T) {
 				return nil, errors.New("api error")
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		cover, err := p.GetSeriesCover(context.Background(), "20")
 		if err != nil {
 			t.Fatalf("expected no error in ignore mode, got: %v", err)
@@ -158,7 +159,7 @@ func TestGetSeriesCover(t *testing.T) {
 				return nil, errors.New("api error")
 			},
 		}
-		p := NewAniListProvider(client, false, "fail")
+		p := NewAniListProvider(client, false, CoverFailureModeFail)
 		cover, err := p.GetSeriesCover(context.Background(), "20")
 		if err == nil {
 			t.Fatal("expected error in fail mode")
@@ -169,7 +170,7 @@ func TestGetSeriesCover(t *testing.T) {
 	})
 
 	t.Run("invalid ID in ignore mode returns empty no error", func(t *testing.T) {
-		p := NewAniListProvider(&mockAniListClient{}, false, "ignore")
+		p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
 		cover, err := p.GetSeriesCover(context.Background(), "bad-id")
 		if err != nil {
 			t.Fatalf("expected no error in ignore mode, got: %v", err)
@@ -180,7 +181,7 @@ func TestGetSeriesCover(t *testing.T) {
 	})
 
 	t.Run("invalid ID in fail mode returns error", func(t *testing.T) {
-		p := NewAniListProvider(&mockAniListClient{}, false, "fail")
+		p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeFail)
 		_, err := p.GetSeriesCover(context.Background(), "bad-id")
 		if err == nil {
 			t.Fatal("expected error in fail mode for invalid ID")
@@ -191,7 +192,8 @@ func TestGetSeriesCover(t *testing.T) {
 // --- GetBookMetadata ---
 
 func TestGetBookMetadataNotSupported(t *testing.T) {
-	p := NewAniListProvider(&mockAniListClient{}, false, "ignore")
+	t.Parallel()
+	p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
 	result, err := p.GetBookMetadata(context.Background(), "123", "1")
 	if !errors.Is(err, metadata.ErrNotSupported) {
 		t.Errorf("expected ErrNotSupported, got: %v", err)
@@ -204,7 +206,8 @@ func TestGetBookMetadataNotSupported(t *testing.T) {
 // --- MatchSeries ---
 
 func TestMatchSeriesNotSupported(t *testing.T) {
-	p := NewAniListProvider(&mockAniListClient{}, false, "ignore")
+	t.Parallel()
+	p := NewAniListProvider(&mockAniListClient{}, false, CoverFailureModeIgnore)
 	result, err := p.MatchSeries(context.Background(), "Naruto")
 	if !errors.Is(err, metadata.ErrNotSupported) {
 		t.Errorf("expected ErrNotSupported, got: %v", err)
@@ -217,6 +220,7 @@ func TestMatchSeriesNotSupported(t *testing.T) {
 // --- SearchSeries ---
 
 func TestSearchSeries(t *testing.T) {
+	t.Parallel()
 	t.Run("returns mapped results", func(t *testing.T) {
 		media := sampleMedia()
 		client := &mockAniListClient{
@@ -224,7 +228,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{*media}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "Naruto", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -263,7 +267,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{*media}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "Naruto (2002)", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -288,7 +292,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{*media}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "Naruto [Manga]", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -309,7 +313,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "Naruto", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -333,7 +337,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "(2002)", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -352,7 +356,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "NonExistent (2099)", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -374,7 +378,7 @@ func TestSearchSeries(t *testing.T) {
 				return []anilist.MediaFull{*media}, nil
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		results, err := p.SearchSeries(context.Background(), "Naruto (2002)", 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -393,7 +397,7 @@ func TestSearchSeries(t *testing.T) {
 				return nil, errors.New("api error")
 			},
 		}
-		p := NewAniListProvider(client, false, "ignore")
+		p := NewAniListProvider(client, false, CoverFailureModeIgnore)
 		_, err := p.SearchSeries(context.Background(), "Naruto", 10)
 		if err == nil {
 			t.Fatal("expected error")

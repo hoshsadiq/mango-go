@@ -151,7 +151,7 @@ func (s *Store) UpsertSeriesMetadata(folderID int64, meta *metadata.SeriesMetada
 	}
 
 	var setClauses []string
-	var args []interface{}
+	var args []any
 
 	if meta.Status != nil && !statusLock {
 		setClauses = append(setClauses, "status = ?")
@@ -495,7 +495,7 @@ func (s *Store) UpdateMetadataLocks(folderID int64, locks map[string]bool) error
 	}
 
 	var setClauses []string
-	var args []interface{}
+	var args []any
 	for field, locked := range locks {
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", field))
 		if locked {
@@ -525,7 +525,7 @@ func (s *Store) UpdateMetadataLocks(folderID int64, locks map[string]bool) error
 
 // UpdateMetadataField updates a single scalar field by name and auto-locks it.
 // Creates the metadata row if it doesn't exist yet.
-func (s *Store) UpdateMetadataField(folderID int64, field string, value interface{}) error {
+func (s *Store) UpdateMetadataField(folderID int64, field string, value any) error {
 	lockCol, ok := validScalarFields[field]
 	if !ok {
 		return fmt.Errorf("unknown metadata field: %s", field)

@@ -13,50 +13,68 @@ import (
 
 const maxQueryLength = 400
 
+type MediaTitle struct {
+	Romaji  string `json:"romaji"`
+	English string `json:"english"`
+	Native  string `json:"native"`
+}
+
+type MediaTag struct {
+	Name           string `json:"name"`
+	Rank           *int   `json:"rank"`
+	IsMediaSpoiler bool   `json:"isMediaSpoiler"`
+}
+
+type MediaStaffName struct {
+	Full string `json:"full"`
+}
+
+type MediaStaffNode struct {
+	Name MediaStaffName `json:"name"`
+}
+
+type MediaStaffEdge struct {
+	Role string         `json:"role"`
+	Node MediaStaffNode `json:"node"`
+}
+
+type MediaStaff struct {
+	Edges []MediaStaffEdge `json:"edges"`
+}
+
+type MediaDate struct {
+	Year  *int `json:"year"`
+	Month *int `json:"month"`
+	Day   *int `json:"day"`
+}
+
+type MediaExternalLink struct {
+	URL  string `json:"url"`
+	Site string `json:"site"`
+	Type string `json:"type"`
+}
+
+type MediaCoverImage struct {
+	Large string `json:"large"`
+}
+
 // MediaFull represents the expanded AniList Media fields for full metadata retrieval.
 type MediaFull struct {
-	ID     int64  `json:"id"`
-	Status string `json:"status"`
-	Title  struct {
-		Romaji  string `json:"romaji"`
-		English string `json:"english"`
-		Native  string `json:"native"`
-	} `json:"title"`
-	Description string   `json:"description"`
-	Genres      []string `json:"genres"`
-	Tags        []struct {
-		Name           string `json:"name"`
-		Rank           *int   `json:"rank"`
-		IsMediaSpoiler bool   `json:"isMediaSpoiler"`
-	} `json:"tags"`
-	Staff struct {
-		Edges []struct {
-			Role string `json:"role"`
-			Node struct {
-				Name struct {
-					Full string `json:"full"`
-				} `json:"name"`
-			} `json:"node"`
-		} `json:"edges"`
-	} `json:"staff"`
-	StartDate struct {
-		Year  *int `json:"year"`
-		Month *int `json:"month"`
-		Day   *int `json:"day"`
-	} `json:"startDate"`
-	Volumes         *int   `json:"volumes"`
-	AverageScore    *int   `json:"averageScore"`
-	IsAdult         bool   `json:"isAdult"`
-	CountryOfOrigin string `json:"countryOfOrigin"`
-	ExternalLinks   []struct {
-		URL  string `json:"url"`
-		Site string `json:"site"`
-		Type string `json:"type"`
-	} `json:"externalLinks"`
-	SiteURL    string `json:"siteUrl"`
-	CoverImage struct {
-		Large string `json:"large"`
-	} `json:"coverImage"`
+	ID              int64               `json:"id"`
+	Status          string              `json:"status"`
+	Title           MediaTitle          `json:"title"`
+	Description     string              `json:"description"`
+	Genres          []string            `json:"genres"`
+	Tags            []MediaTag          `json:"tags"`
+	Staff           MediaStaff          `json:"staff"`
+	StartDate       MediaDate           `json:"startDate"`
+	Volumes         *int                `json:"volumes"`
+	AverageScore    *int                `json:"averageScore"`
+	IsAdult         bool                `json:"isAdult"`
+	CountryOfOrigin string              `json:"countryOfOrigin"`
+	ExternalLinks   []MediaExternalLink `json:"externalLinks"`
+	SiteURL         string              `json:"siteUrl"`
+	CoverImage      MediaCoverImage     `json:"coverImage"`
 }
 
 // Client wraps the retry-aware HTTP client for AniList GraphQL API calls.
@@ -138,9 +156,9 @@ func (c *Client) SearchMediaFull(ctx context.Context, query string, limit int) (
 		query = string(runes[:maxQueryLength])
 	}
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"query": searchMediaFullQuery,
-		"variables": map[string]interface{}{
+		"variables": map[string]any{
 			"search":  query,
 			"perPage": limit,
 		},
@@ -164,9 +182,9 @@ func (c *Client) SearchMediaFull(ctx context.Context, query string, limit int) (
 
 // GetMediaFull fetches a single manga by AniList ID with full metadata fields.
 func (c *Client) GetMediaFull(ctx context.Context, id int) (*MediaFull, error) {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"query": getMediaFullQuery,
-		"variables": map[string]interface{}{
+		"variables": map[string]any{
 			"id": id,
 		},
 	}
@@ -188,7 +206,7 @@ func (c *Client) GetMediaFull(ctx context.Context, id int) (*MediaFull, error) {
 }
 
 // doGraphQL sends a GraphQL POST request and decodes the JSON response into target.
-func (c *Client) doGraphQL(ctx context.Context, body map[string]interface{}, target interface{}) error {
+func (c *Client) doGraphQL(ctx context.Context, body map[string]any, target any) error {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal graphql request: %w", err)

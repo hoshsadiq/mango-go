@@ -13,6 +13,16 @@ import (
 
 var bracketStripRe = regexp.MustCompile(`\s*[\(\[\{][^\)\]\}]*[\)\]\}]\s*`)
 
+// CoverFailureMode controls how GetSeriesCover behaves when the cover cannot be fetched.
+type CoverFailureMode string
+
+const (
+	// CoverFailureModeIgnore silently returns an empty string on cover fetch errors.
+	CoverFailureModeIgnore CoverFailureMode = "ignore"
+	// CoverFailureModeFail propagates the error to the caller.
+	CoverFailureModeFail CoverFailureMode = "fail"
+)
+
 // aniListClient defines the subset of anilist.Client methods used by the provider.
 // This enables test mocking without modifying the anilist package.
 type aniListClient interface {
@@ -24,11 +34,11 @@ type aniListClient interface {
 type AniListProvider struct {
 	client           aniListClient
 	excludeSpoilers  bool
-	coverFailureMode string
+	coverFailureMode CoverFailureMode
 }
 
 // NewAniListProvider creates a new AniList metadata provider.
-func NewAniListProvider(client aniListClient, excludeSpoilers bool, coverFailureMode string) *AniListProvider {
+func NewAniListProvider(client aniListClient, excludeSpoilers bool, coverFailureMode CoverFailureMode) *AniListProvider {
 	return &AniListProvider{
 		client:           client,
 		excludeSpoilers:  excludeSpoilers,
@@ -61,7 +71,7 @@ func (p *AniListProvider) GetSeriesMetadata(ctx context.Context, seriesID string
 func (p *AniListProvider) GetSeriesCover(ctx context.Context, seriesID string) (string, error) {
 	id, err := strconv.Atoi(seriesID)
 	if err != nil {
-		if p.coverFailureMode == "ignore" {
+		if p.coverFailureMode == CoverFailureModeIgnore {
 			return "", nil
 		}
 		return "", fmt.Errorf("invalid anilist series ID %q: %w", seriesID, err)
@@ -69,7 +79,7 @@ func (p *AniListProvider) GetSeriesCover(ctx context.Context, seriesID string) (
 
 	media, err := p.client.GetMediaFull(ctx, id)
 	if err != nil {
-		if p.coverFailureMode == "ignore" {
+		if p.coverFailureMode == CoverFailureModeIgnore {
 			return "", nil
 		}
 		return "", fmt.Errorf("fetch anilist cover %d: %w", id, err)

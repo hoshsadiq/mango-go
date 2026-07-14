@@ -23,6 +23,7 @@ func createTestFolder(t *testing.T, s *store.Store, name string) int64 {
 }
 
 func TestMetadataCreateRead(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "Naruto")
@@ -121,6 +122,7 @@ func TestMetadataCreateRead(t *testing.T) {
 }
 
 func TestMetadataNilSkip(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "NilSkipTest")
@@ -159,6 +161,7 @@ func TestMetadataNilSkip(t *testing.T) {
 }
 
 func TestMetadataLockEnforcement(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "LockTest")
@@ -193,6 +196,7 @@ func TestMetadataLockEnforcement(t *testing.T) {
 }
 
 func TestMetadataLockPreventsCollectionReplace(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "CollLockTest")
@@ -224,6 +228,7 @@ func TestMetadataLockPreventsCollectionReplace(t *testing.T) {
 }
 
 func TestMetadataEmptySliceClearsCollection(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "EmptySliceTest")
@@ -251,6 +256,7 @@ func TestMetadataEmptySliceClearsCollection(t *testing.T) {
 }
 
 func TestMetadataGetNotFound(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "NotFoundTest")
@@ -262,6 +268,7 @@ func TestMetadataGetNotFound(t *testing.T) {
 }
 
 func TestProviderLinkNotFound(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "PLNotFound")
@@ -273,6 +280,7 @@ func TestProviderLinkNotFound(t *testing.T) {
 }
 
 func TestProviderLinkCRUD(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "PLCrud")
@@ -311,6 +319,7 @@ func TestProviderLinkCRUD(t *testing.T) {
 }
 
 func TestUpdateMetadataFieldAutoLocks(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "AutoLock")
@@ -349,6 +358,7 @@ func TestUpdateMetadataFieldAutoLocks(t *testing.T) {
 }
 
 func TestUpdateMetadataFieldRejectsUnknown(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "UnknownField")
@@ -360,6 +370,7 @@ func TestUpdateMetadataFieldRejectsUnknown(t *testing.T) {
 }
 
 func TestUpdateMetadataLocksRejectsUnknown(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "UnknownLock")
@@ -377,6 +388,7 @@ func TestUpdateMetadataLocksRejectsUnknown(t *testing.T) {
 }
 
 func TestMetadataReset(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "ResetTest")
@@ -449,6 +461,7 @@ func TestMetadataReset(t *testing.T) {
 }
 
 func TestMetadataUnlink(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "UnlinkTest")
@@ -487,6 +500,7 @@ func TestMetadataUnlink(t *testing.T) {
 }
 
 func TestUpdateMetadataFieldCreatesRow(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "FieldCreateRow")
@@ -509,6 +523,7 @@ func TestUpdateMetadataFieldCreatesRow(t *testing.T) {
 }
 
 func TestMetadataReleaseDateLockCoversAllThreeFields(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "DateLock")
@@ -551,6 +566,7 @@ func TestMetadataReleaseDateLockCoversAllThreeFields(t *testing.T) {
 }
 
 func TestMetadataNilSliceKeepsExistingCollection(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 	folderID := createTestFolder(t, s, "NilSliceKeep")
