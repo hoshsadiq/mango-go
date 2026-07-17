@@ -12,6 +12,7 @@ const (
 	AuthorRoleCoverArtist AuthorRole = "COVER_ARTIST"
 	AuthorRoleEditor      AuthorRole = "EDITOR"
 	AuthorRoleTranslator  AuthorRole = "TRANSLATOR"
+	AuthorRoleOther       AuthorRole = "OTHER"
 )
 
 // SeriesStatus represents the publication status of a series

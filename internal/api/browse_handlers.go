@@ -73,7 +73,11 @@ func (s *Server) handleGetBreadcrumb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	folderID, _ := strconv.ParseInt(folderIDStr, 10, 64)
+	folderID, err := strconv.ParseInt(folderIDStr, 10, 64)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid folderId parameter")
+		return
+	}
 	breadcrumb, err := s.store.GetFolderPath(folderID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to retrieve breadcrumb path")
@@ -83,7 +87,10 @@ func (s *Server) handleGetBreadcrumb(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAddTagToFolder(w http.ResponseWriter, r *http.Request) {
-	folderId, _ := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	folderId, ok := parseIDParam(w, r, "folderID")
+	if !ok {
+		return
+	}
 	var payload struct {
 		Name string `json:"name"`
 	}
@@ -106,8 +113,14 @@ func (s *Server) handleAddTagToFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRemoveTagFromFolder(w http.ResponseWriter, r *http.Request) {
-	folderID, _ := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tagID"), 10, 64)
+	folderID, ok := parseIDParam(w, r, "folderID")
+	if !ok {
+		return
+	}
+	tagID, ok := parseIDParam(w, r, "tagID")
+	if !ok {
+		return
+	}
 
 	if err := s.store.RemoveTagFromFolder(folderID, tagID); err != nil {
 		log.Printf("Failed to remove tag %d from folder %d: %v", tagID, folderID, err)
@@ -118,7 +131,10 @@ func (s *Server) handleRemoveTagFromFolder(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleUpdateFolderSettings(w http.ResponseWriter, r *http.Request) {
-	folderID, _ := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	folderID, ok := parseIDParam(w, r, "folderID")
+	if !ok {
+		return
+	}
 
 	user := getUserFromContext(r)
 	if user == nil {
@@ -142,7 +158,10 @@ func (s *Server) handleUpdateFolderSettings(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleGetFolderSettings(w http.ResponseWriter, r *http.Request) {
-	folderID, _ := strconv.ParseInt(chi.URLParam(r, "folderID"), 10, 64)
+	folderID, ok := parseIDParam(w, r, "folderID")
+	if !ok {
+		return
+	}
 
 	user := getUserFromContext(r)
 	if user == nil {

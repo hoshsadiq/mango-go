@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/vrsandeep/mango-go/internal/store"
 )
 
@@ -18,7 +17,10 @@ func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetTagDetails(w http.ResponseWriter, r *http.Request) {
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tagID"), 10, 64)
+	tagID, ok := parseIDParam(w, r, "tagID")
+	if !ok {
+		return
+	}
 	tag, err := s.store.GetTagByID(tagID)
 	if err != nil {
 		RespondWithError(w, http.StatusNotFound, "Tag not found")
@@ -51,7 +53,10 @@ func (s *Server) handleGetTagDetails(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListFoldersByTag(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	page, perPage, search, sortBy, sortDir := getListParams(r)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tagID"), 10, 64)
+	tagID, ok := parseIDParam(w, r, "tagID")
+	if !ok {
+		return
+	}
 
 	// Use the new generic ListItems function with the TagID option.
 	opts := store.ListItemsOptions{

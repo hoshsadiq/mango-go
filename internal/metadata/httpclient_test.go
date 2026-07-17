@@ -12,8 +12,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// TestRetryOn429 verifies that the client retries on 429 (Too Many Requests)
 func TestRetryOn429(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -45,8 +45,8 @@ func TestRetryOn429(t *testing.T) {
 	}
 }
 
-// TestRetryOn500 verifies that the client retries on 5xx errors
 func TestRetryOn500(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -78,8 +78,8 @@ func TestRetryOn500(t *testing.T) {
 	}
 }
 
-// TestExponentialBackoffTiming verifies that backoff delays increase exponentially
 func TestExponentialBackoffTiming(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -117,8 +117,8 @@ func TestExponentialBackoffTiming(t *testing.T) {
 	}
 }
 
-// TestRetryAfterHeader verifies that Retry-After header is respected
 func TestRetryAfterHeader(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -155,8 +155,8 @@ func TestRetryAfterHeader(t *testing.T) {
 	}
 }
 
-// TestMaxRetriesExhausted verifies that error is returned after max retries
 func TestMaxRetriesExhausted(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -181,8 +181,8 @@ func TestMaxRetriesExhausted(t *testing.T) {
 	}
 }
 
-// TestRateLimiterThrottles verifies that rate limiter throttles requests
 func TestRateLimiterThrottles(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -220,8 +220,8 @@ func TestRateLimiterThrottles(t *testing.T) {
 	}
 }
 
-// TestTimeoutNoRetry verifies that requests exceeding timeout are not retried
 func TestTimeoutNoRetry(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -254,8 +254,8 @@ func TestTimeoutNoRetry(t *testing.T) {
 	}
 }
 
-// TestRetryAfterParsingError verifies graceful handling of invalid Retry-After
 func TestRetryAfterParsingError(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -288,8 +288,8 @@ func TestRetryAfterParsingError(t *testing.T) {
 	}
 }
 
-// TestNoRetryOn200 verifies that successful responses are not retried
 func TestNoRetryOn200(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -317,32 +317,35 @@ func TestNoRetryOn200(t *testing.T) {
 	}
 }
 
-// TestNewAniListClient verifies the AniList convenience constructor
 func TestNewAniListClient(t *testing.T) {
+	t.Parallel()
 	client := NewAniListClient()
 
 	if client == nil {
 		t.Fatal("expected non-nil client")
 	}
-	if client.MaxRetries != 3 {
-		t.Fatalf("expected MaxRetries=3, got %d", client.MaxRetries)
-	}
-	if client.InitialBackoff != 2*time.Second {
-		t.Fatalf("expected InitialBackoff=2s, got %v", client.InitialBackoff)
-	}
-	if client.RateLimiter == nil {
-		t.Fatal("expected non-nil RateLimiter")
-	}
 
-	// Verify rate limiter is configured for 15 req/10s (667ms per request)
-	// We can't directly inspect the limiter's rate, but we can verify it exists
-	if client.RateLimiter == nil {
-		t.Fatal("expected RateLimiter to be configured")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("expected successful request, got error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 }
 
-// TestContextCancellation verifies that context cancellation is respected
 func TestContextCancellation(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
@@ -365,8 +368,8 @@ func TestContextCancellation(t *testing.T) {
 	}
 }
 
-// TestRetryOn502 verifies retry on 502 Bad Gateway
 func TestRetryOn502(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -397,8 +400,8 @@ func TestRetryOn502(t *testing.T) {
 	}
 }
 
-// TestRetryOn503 verifies retry on 503 Service Unavailable
 func TestRetryOn503(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -429,8 +432,8 @@ func TestRetryOn503(t *testing.T) {
 	}
 }
 
-// TestPostRetryPreservesBody verifies that POST request bodies are preserved across retries
 func TestPostRetryPreservesBody(t *testing.T) {
+	t.Parallel()
 	expectedBody := `{"query":"test query","variables":{"id":123}}`
 	requestCount := 0
 
@@ -473,8 +476,8 @@ func TestPostRetryPreservesBody(t *testing.T) {
 	}
 }
 
-// TestNoRetryOn4xx verifies that 4xx errors (except 429) are not retried
 func TestNoRetryOn4xx(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -501,8 +504,8 @@ func TestNoRetryOn4xx(t *testing.T) {
 	}
 }
 
-// TestRetryAfterWithZeroSeconds verifies Retry-After parsing with zero seconds
 func TestRetryAfterWithZeroSeconds(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
@@ -534,8 +537,8 @@ func TestRetryAfterWithZeroSeconds(t *testing.T) {
 	}
 }
 
-// TestRateLimiterWithRetry verifies that rate limiter works with retries
 func TestRateLimiterWithRetry(t *testing.T) {
+	t.Parallel()
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++

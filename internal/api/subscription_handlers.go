@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/vrsandeep/mango-go/internal/subscription"
 	"github.com/vrsandeep/mango-go/internal/util"
 )
@@ -77,7 +75,10 @@ func (s *Server) handleListSubscriptions(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDeleteSubscription(w http.ResponseWriter, r *http.Request) {
-	subID, _ := strconv.ParseInt(chi.URLParam(r, "subID"), 10, 64)
+	subID, ok := parseIDParam(w, r, "subID")
+	if !ok {
+		return
+	}
 	if err := s.store.DeleteSubscription(subID); err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to delete subscription")
 		return
@@ -86,7 +87,10 @@ func (s *Server) handleDeleteSubscription(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleUpdateSubscriptionFolderPath(w http.ResponseWriter, r *http.Request) {
-	subID, _ := strconv.ParseInt(chi.URLParam(r, "subID"), 10, 64)
+	subID, ok := parseIDParam(w, r, "subID")
+	if !ok {
+		return
+	}
 
 	var payload struct {
 		FolderPath *string `json:"folder_path,omitempty"`
@@ -130,7 +134,10 @@ func (s *Server) handleUpdateSubscriptionFolderPath(w http.ResponseWriter, r *ht
 }
 
 func (s *Server) handleRecheckSubscription(w http.ResponseWriter, r *http.Request) {
-	subID, _ := strconv.ParseInt(chi.URLParam(r, "subID"), 10, 64)
+	subID, ok := parseIDParam(w, r, "subID")
+	if !ok {
+		return
+	}
 
 	// Run the check in a background goroutine so the API call returns immediately.
 	go func() {

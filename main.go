@@ -33,7 +33,6 @@ func main() {
 	}
 	defer app.Close()
 
-	// --- First User Provisioning ---
 	st := store.New(app.DB())
 	userCount, err := st.CountUsers()
 	if err != nil {
@@ -109,7 +108,6 @@ func main() {
 		Addr:    addr,
 		Handler: server.Router(),
 	}
-	// --- Graceful Shutdown ---
 	// Start the server in a goroutine so it doesn't block.
 	go func() {
 		log.Printf("Starting web server on %s", httpServer.Addr)

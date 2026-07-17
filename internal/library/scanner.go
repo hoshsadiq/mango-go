@@ -156,8 +156,16 @@ func performSync(ctx jobs.JobContext, jobId string, diskItems map[string]diskIte
 
 	// 1. Preparation: Get current state from DB
 	sendProgress(ctx, jobId, "Fetching current library state...", 5, false)
-	dbFolders, _ := st.GetAllFoldersByPath()
-	dbChapters, _ := st.GetAllChaptersByHash()
+	dbFolders, err := st.GetAllFoldersByPath()
+	if err != nil {
+		log.Printf("Error fetching folders: %v", err)
+		return
+	}
+	dbChapters, err := st.GetAllChaptersByHash()
+	if err != nil {
+		log.Printf("Error fetching chapters: %v", err)
+		return
+	}
 	// Also create a map by path for quick metadata lookup
 	dbChaptersByPath := make(map[string]store.ChapterInfo)
 	for _, info := range dbChapters {
@@ -169,7 +177,11 @@ func performSync(ctx jobs.JobContext, jobId string, diskItems map[string]diskIte
 	syncFolders(st, rootPath, diskItems, dbFolders)
 
 	// Refresh folder map after sync
-	dbFolders, _ = st.GetAllFoldersByPath()
+	dbFolders, err = st.GetAllFoldersByPath()
+	if err != nil {
+		log.Printf("Error refreshing folders: %v", err)
+		return
+	}
 
 	// 3. Reconcile Chapters
 	sendProgress(ctx, jobId, "Syncing chapters...", 50, false)

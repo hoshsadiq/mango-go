@@ -3,9 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/vrsandeep/mango-go/internal/auth"
 )
 
@@ -49,7 +47,10 @@ func (s *Server) handleAdminCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
-	userID, _ := strconv.ParseInt(chi.URLParam(r, "userID"), 10, 64)
+	userID, ok := parseIDParam(w, r, "userID")
+	if !ok {
+		return
+	}
 	var payload struct {
 		Username string `json:"username"`
 		Role     string `json:"role"`
@@ -82,7 +83,10 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
-	userID, _ := strconv.ParseInt(chi.URLParam(r, "userID"), 10, 64)
+	userID, ok := parseIDParam(w, r, "userID")
+	if !ok {
+		return
+	}
 
 	// You might want to prevent an admin from deleting themselves
 	currentUser := getUserFromContext(r)

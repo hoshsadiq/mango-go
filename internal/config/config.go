@@ -45,7 +45,6 @@ func Load() (*Config, error) {
 	viper.SetConfigType("yml")    // or "yaml"
 	viper.AddConfigPath(".")      // looking for config in the current directory
 
-	// --- Environment Variable Overrides ---
 	// This tells Viper to look for environment variables with a "MANGO_" prefix.
 	// e.g., MANGO_DATABASE_PATH will override the `database.path` key.
 	viper.SetEnvPrefix("MANGO")

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/vrsandeep/mango-go/internal/models"
@@ -36,7 +37,10 @@ func (s *Store) CreateUser(username, passwordHash, role string) (*models.User, e
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("last insert id: %w", err)
+	}
 	return &models.User{
 		ID:       id,
 		Username: username,
