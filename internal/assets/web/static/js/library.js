@@ -888,6 +888,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error(errData.error || `Save failed (HTTP ${res.status})`);
       }
 
+      // Optimistically flip lock icons for edited fields so the UI reflects
+      // the server's auto-lock behavior immediately, without waiting for the
+      // re-fetch below. release_year/month/day all share release_date_lock.
+      Object.keys(body).forEach(field => {
+        const lockKey = fieldToLockKey(field);
+        const icon = metadataPanel.querySelector(`.md-lock-toggle[data-lock-field="${lockKey}"]`);
+        if (icon) {
+          icon.dataset.locked = 'true';
+          icon.className = 'ph-bold ph-lock md-lock md-lock-toggle';
+          icon.title = "Locked: this field won't be changed on refresh";
+        }
+      });
+
       toast.success('Metadata saved');
       mdEditMode = false;
       fetchAndRenderMetadataPanel(folderId);
