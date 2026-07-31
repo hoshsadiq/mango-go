@@ -261,14 +261,14 @@ func (s *Server) fetchAndStoreMetadata(w http.ResponseWriter, r *http.Request, f
 	meta, err := s.metadataProvider.GetSeriesMetadata(ctx, providerID)
 	if err != nil {
 		log.Printf("GetSeriesMetadata(provider=%q, id=%q): %v", s.metadataProvider.Name(), providerID, err)
-		RespondWithError(w, http.StatusBadGateway, "failed to fetch metadata from provider: "+err.Error())
+		RespondWithError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch metadata from provider: %v", err))
 		return
 	}
 
 	coverURL, err := s.metadataProvider.GetSeriesCover(ctx, providerID)
 	if err != nil {
 		log.Printf("GetSeriesCover(provider=%q, id=%q): %v", s.metadataProvider.Name(), providerID, err)
-		RespondWithError(w, http.StatusBadGateway, "failed to fetch cover from provider: "+err.Error())
+		RespondWithError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch cover from provider: %v", err))
 		return
 	}
 	if coverURL != "" {
@@ -324,7 +324,7 @@ func (s *Server) handleLinkMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !knownProviders[req.ProviderName] {
-		RespondWithError(w, http.StatusBadRequest, "unknown provider_name: "+req.ProviderName)
+		RespondWithError(w, http.StatusBadRequest, fmt.Sprintf("unknown provider_name: %s", req.ProviderName))
 		return
 	}
 	if req.ProviderID == "" {
@@ -645,6 +645,7 @@ func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
 			RespondWithError(w, http.StatusInternalServerError, "Failed to load metadata")
 			return
 		}
+		// No metadata row exists yet — seed an empty record so the field-level updates below have a row to patch.
 		if err := s.store.UpsertSeriesMetadata(folderID, &metadata.SeriesMetadata{}); err != nil {
 			log.Printf("UpsertSeriesMetadata(%d): %v", folderID, err)
 			RespondWithError(w, http.StatusInternalServerError, "Failed to create metadata record")
@@ -655,7 +656,7 @@ func (s *Server) handleEditMetadata(w http.ResponseWriter, r *http.Request) {
 	for _, u := range updates {
 		if err := s.store.UpdateMetadataField(folderID, u.name, u.value); err != nil {
 			log.Printf("UpdateMetadataField(%d, %q): %v", folderID, u.name, err)
-			RespondWithError(w, http.StatusInternalServerError, "Failed to update field: "+u.name)
+			RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update field: %s", u.name))
 			return
 		}
 	}
