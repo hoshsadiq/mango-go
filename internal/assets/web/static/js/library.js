@@ -181,6 +181,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     return ` <i class="ph-bold ph-lock-open md-lock md-lock-toggle md-lock-unlocked" data-lock-field="${lockField}" data-locked="false" title="Unlocked: this field will be updated on refresh"></i>`;
   };
+
+  // Map from metadata field name to lock request key (with _lock suffix)
+  const fieldToLockKey = field => {
+    // release_year/month/day all share release_date_lock
+    if (field === 'release_year' || field === 'release_month' || field === 'release_day') {
+      return 'release_date_lock';
+    }
+    return field + '_lock';
+  };
+
   // Map from lock field name to the lock response key (without _lock suffix)
   const lockFieldToResponseKey = lockField => {
     return lockField.replace(/_lock$/, '');
