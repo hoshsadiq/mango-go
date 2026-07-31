@@ -281,6 +281,9 @@ func (s *Server) fetchAndStoreMetadata(w http.ResponseWriter, r *http.Request, f
 		return
 	}
 
+	// Merge provider tags (not genres) into folder tags. Failures are non-fatal
+	// because tag enrichment is secondary to the metadata upsert — a single tag
+	// write error should not roll back an otherwise successful link/refresh.
 	for _, name := range meta.Tags {
 		if _, err := s.store.AddTagToFolder(folderID, name, "anilist"); err != nil {
 			log.Printf("AddTagToFolder(%d, %q, \"anilist\") tag: %v", folderID, name, err)
