@@ -16,6 +16,8 @@ import (
 	"github.com/vrsandeep/mango-go/internal/anilist"
 	"github.com/vrsandeep/mango-go/internal/assets"
 	"github.com/vrsandeep/mango-go/internal/core"
+	"github.com/vrsandeep/mango-go/internal/metadata"
+	metadataanilist "github.com/vrsandeep/mango-go/internal/metadata/anilist"
 	"github.com/vrsandeep/mango-go/internal/store"
 )
 
@@ -26,11 +28,12 @@ type AnilistSearcher interface {
 
 // Server holds the dependencies for our API.
 type Server struct {
-	app             *core.App
-	db              *sql.DB
-	store           *store.Store
-	homeStore       HomeStore
-	anilistSearcher AnilistSearcher
+	app              *core.App
+	db               *sql.DB
+	store            *store.Store
+	homeStore        HomeStore
+	anilistSearcher  AnilistSearcher
+	metadataProvider metadata.MetadataProvider
 }
 
 // Store returns the store instance.
@@ -48,14 +51,27 @@ func (s *Server) SetAnilistSearcher(searcher AnilistSearcher) {
 	s.anilistSearcher = searcher
 }
 
+// SetMetadataProvider sets the metadata provider for testing (mock provider responses).
+func (s *Server) SetMetadataProvider(provider metadata.MetadataProvider) {
+	s.metadataProvider = provider
+}
+
 // NewServer creates a new Server instance.
 func NewServer(app *core.App) *Server {
 	storeInstance := store.New(app.DB())
+	cfg := app.Config()
+	anilistClient := anilist.NewClient(metadata.NewAniListClient())
+	provider := metadataanilist.NewAniListProvider(
+		anilistClient,
+		cfg.Metadata.AniList.ExcludeSpoilerTags,
+		cfg.Metadata.CoverFailureMode,
+	)
 	return &Server{
-		app:       app,
-		db:        app.DB(),
-		store:     storeInstance,
-		homeStore: storeInstance, // Use the concrete store by default
+		app:              app,
+		db:               app.DB(),
+		store:            storeInstance,
+		homeStore:        storeInstance,
+		metadataProvider: provider,
 	}
 }
 
@@ -98,7 +114,17 @@ func (s *Server) Router() http.Handler {
 			r.Put("/folders/{folderID}/rating", s.handleUpdateFolderRating)
 			r.Get("/folders/{folderID}/anilist", s.handleGetFolderAnilist)
 			r.Post("/folders/{folderID}/anilist", s.handlePostFolderAnilist)
+			r.Get("/folders/{folderID}/metadata", s.handleGetMetadata)
+			r.Post("/folders/{folderID}/metadata/link", s.handleLinkMetadata)
+			r.Post("/folders/{folderID}/metadata/refresh", s.handleRefreshMetadata)
+			r.Post("/folders/{folderID}/metadata/reset", s.handleResetMetadata)
+			r.Post("/folders/{folderID}/metadata/unlink", s.handleUnlinkMetadata)
+			r.Patch("/folders/{folderID}/metadata", s.handleEditMetadata)
+			r.Patch("/folders/{folderID}/metadata/locks", s.handleEditLocks)
 			r.Get("/folders/{folderID}/chapters/{chapterID}/neighbors", s.handleGetChapterNeighbors)
+
+			// Metadata Search
+			r.Get("/metadata/search", s.handleSearchMetadata)
 
 			r.Get("/chapters/{chapterID}", s.handleGetChapterDetails)
 			r.Post("/chapters/{chapterID}/progress", s.handleUpdateProgress)
