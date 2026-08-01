@@ -12,6 +12,7 @@ import (
 	"github.com/vrsandeep/mango-go/internal/downloader/providers"
 	"github.com/vrsandeep/mango-go/internal/downloader/providers/mockadex"
 	"github.com/vrsandeep/mango-go/internal/jobs"
+	"github.com/vrsandeep/mango-go/internal/store"
 	"github.com/vrsandeep/mango-go/internal/websocket"
 )
 
@@ -31,6 +32,7 @@ func SetupTestApp(t *testing.T) *core.App {
 	app.SetConfig(cfg)
 	app.SetDB(db)
 	app.SetWsHub(hub)
+	app.ChapterMetadataStore = store.NewChapterMetadataStore(db)
 
 	t.Cleanup(func() {
 		providers.UnregisterAll()
@@ -59,6 +61,7 @@ func SetupTestServer(t *testing.T) (*api.Server, *sql.DB, *jobs.JobManager) {
 	app.SetConfig(cfg)
 	app.SetDB(db)
 	app.SetWsHub(hub)
+	app.ChapterMetadataStore = store.NewChapterMetadataStore(db)
 
 	t.Cleanup(func() {
 		providers.UnregisterAll()

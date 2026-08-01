@@ -659,7 +659,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     if (hasErrors) return;
 
-    // Build PATCH body with only changed scalar fields
     const body = {};
 
     ['title', 'summary', 'publisher', 'language'].forEach(field => {
