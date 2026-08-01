@@ -1,55 +1,54 @@
 package testutil
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/vrsandeep/mango-go/internal/api"
 	"github.com/vrsandeep/mango-go/internal/auth"
 )
 
-// GetAuthCookie creates a user, logs them in, and returns a valid session cookie.
+var precomputedTestPasswordHash = MustHashPassword("pw")
+
+// MustHashPassword is like auth.HashPassword but panics on error.
+func MustHashPassword(password string) string {
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		panic("testutil: failed to hash password: " + err.Error())
+	}
+	return hash
+}
+
+// GetAuthCookie creates a user, creates a session, and returns a valid session cookie.
+// Bypasses the login HTTP endpoint to avoid per-test request overhead.
 func GetAuthCookie(t *testing.T, s *api.Server, username, password, role string) *http.Cookie {
 	t.Helper()
 
-	// Step 1: CORRECTLY hash the password before creating the user.
-	passwordHash, err := auth.HashPassword(password)
-	if err != nil {
-		t.Fatalf("Failed to hash password for test user: %v", err)
+	var passwordHash string
+	if password == "pw" {
+		passwordHash = precomputedTestPasswordHash
+	} else {
+		var err error
+		passwordHash, err = auth.HashPassword(password)
+		if err != nil {
+			t.Fatalf("Failed to hash password for test user: %v", err)
+		}
 	}
-	// The store's CreateUser expects a hash, not a plaintext password.
-	_, err = s.Store().CreateUser(username, passwordHash, role)
+	user, err := s.Store().CreateUser(username, passwordHash, role)
 	if err != nil {
 		t.Fatalf("Failed to create test user '%s': %v", username, err)
 	}
 
-	// Step 2: Log in as the newly created user to get a session.
-	loginPayload := map[string]string{"username": username, "password": password}
-	payloadBytes, _ := json.Marshal(loginPayload)
-	req, _ := http.NewRequest("POST", "/api/users/login", bytes.NewBuffer(payloadBytes))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	s.Router().ServeHTTP(rr, req)
-
-	// Assert that the login was successful.
-	if status := rr.Code; status != http.StatusOK {
-		t.Fatalf("Login failed within test helper for user '%s': got status %d, want 200", username, status)
+	token, err := s.Store().CreateSession(user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create session for test user '%s': %v", username, err)
 	}
-
-	// Step 3: Extract the session cookie from the response.
-	cookies := rr.Result().Cookies()
-	for _, cookie := range cookies {
-		if cookie.Name == "session_token" {
-			return cookie
-		}
+	return &http.Cookie{
+		Name:     "session_token",
+		Value:    token,
+		HttpOnly: true,
+		Path:     "/",
 	}
-
-	t.Fatal("Failed to get session cookie after successful login for test user")
-	return nil
 }
 
 func CookieForUser(t *testing.T, server *api.Server, username, password, role string) *http.Cookie {

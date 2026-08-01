@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     totalItems: 0,
     perPage: 100,
     currentRating: null,
+    currentFolderName: null,
   };
   let allTags = [];
   let currentFolderTags = [];
@@ -71,6 +72,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let mdOriginalMetadata = null; // Last-fetched metadata for diff/cancel
   let mdOriginalProvider = null; // Last-fetched provider for reference
   let mdEditMode = false;
+  // In-flight metadata fetch controller. Rapid folder navigation can otherwise
+  // let a slow response from folder A overwrite the panel for folder B.
+  let mdInFlightController = null;
+  let mdInFlightFolderId = null;
   const TAGS_COLLAPSED_LIMIT = 8;
   const FILTER_CHIPS_LIMIT = 10;
 
@@ -142,8 +147,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   };
+
+  const canEditMetadata = () => currentUser && currentUser.role === 'admin';
 
   const formatReadingDirection = val => {
     const map = {
@@ -156,7 +164,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const formatAuthorRole = role => {
-    return role
+    if (!role) return 'Other';
+    return String(role)
       .split('_')
       .map(w => w.charAt(0) + w.slice(1).toLowerCase())
       .join(' ');
@@ -174,8 +183,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return date;
   };
 
-  // Lock icon helper, now always renders an icon (clickable toggle).
-  const lockIconHtml = (locked, lockField) => {
+  // Lock icon helper. In edit mode we render a clickable toggle; in view mode we
+  // only surface the padlock indicator when the field is actually locked so
+  // non-admin users are not misled into thinking there is anything to click.
+  const lockIconHtml = (locked, lockField, editMode) => {
+    const canEdit = canEditMetadata();
+    if (!canEdit && !editMode) {
+      if (!locked) return '';
+      return ` <i class="ph-bold ph-lock md-lock" title="Locked: this field won't be changed on refresh"></i>`;
+    }
     if (locked) {
       return ` <i class="ph-bold ph-lock md-lock md-lock-toggle" data-lock-field="${lockField}" data-locked="true" title="Locked: this field won't be changed on refresh"></i>`;
     }
@@ -197,6 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const toggleFieldLock = async (folderId, lockField, currentlyLocked) => {
+    if (!canEditMetadata()) return;
     const newValue = !currentlyLocked;
     try {
       const res = await fetch(`/api/folders/${folderId}/metadata/locks`, {
@@ -286,62 +303,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (errEl) errEl.style.display = 'none';
   };
 
-  // --- Chip input helper for arrays ---
+  // Chip input helper. Collection editing is not persisted by the API yet, so
+  // in edit mode we render existing items as read-only pills with an explanatory
+  // note rather than exposing add/remove controls that silently discard changes.
   const renderChipInput = (items, fieldName, editable) => {
     let html = `<div class="md-chip-input-container" data-field="${fieldName}">`;
     html += '<div class="md-chips">';
-    (items || []).forEach((item, idx) => {
-      html += `<span class="md-chip">${escapeHtml(item)}`;
-      if (editable) {
-        html += ` <button class="md-chip-remove" data-idx="${idx}" type="button">&times;</button>`;
-      }
-      html += '</span>';
+    (items || []).forEach(item => {
+      html += `<span class="md-chip" data-value="${escapeHtml(item)}">${escapeHtml(item)}</span>`;
     });
     html += '</div>';
     if (editable) {
-      html += `<div class="md-chip-add-row">`;
-      html += `<input type="text" class="md-chip-new-input" placeholder="Type and press Enter" data-field="${fieldName}">`;
-      html += `</div>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
+      html += `<div class="md-edit-note">Collection editing is not supported yet — this list will not be modified when you save.</div>`;
     }
     html += '</div>';
     return html;
   };
 
-  const attachChipListeners = () => {
-    metadataPanel.querySelectorAll('.md-chip-input-container').forEach(container => {
-      const field = container.dataset.field;
-      container.querySelectorAll('.md-chip-remove').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const chip = btn.closest('.md-chip');
-          chip.remove();
-        });
-      });
-      const input = container.querySelector('.md-chip-new-input');
-      if (input) {
-        input.addEventListener('keydown', e => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            const val = input.value.trim();
-            if (!val) return;
-            const existing = Array.from(container.querySelectorAll('.md-chip')).map(c =>
-              c.textContent.replace('×', '').trim()
-            );
-            if (existing.includes(val)) {
-              input.value = '';
-              return;
-            }
-            const chip = document.createElement('span');
-            chip.className = 'md-chip';
-            chip.innerHTML = `${escapeHtml(val)} <button class="md-chip-remove" type="button">&times;</button>`;
-            chip.querySelector('.md-chip-remove').addEventListener('click', () => chip.remove());
-            container.querySelector('.md-chips').appendChild(chip);
-            input.value = '';
-          }
-        });
-      }
-    });
-  };
+  const attachChipListeners = () => {};
 
   // --- Authors edit helpers ---
   const AUTHOR_ROLES = [
@@ -425,27 +404,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Still show edit button area
       }
     }
-    // Edit/Save/Cancel buttons
+    // Edit/Save/Cancel buttons — only admins can mutate; hide for read-only users.
     if (editMode) {
       html += '<span class="md-actions-spacer"></span>';
       html += `<button class="md-action-btn md-save-btn" id="md-save-btn" title="Edited fields are automatically locked to prevent provider overwrite"><i class="ph-bold ph-floppy-disk"></i> Save</button>`;
       html += `<button class="md-action-btn" id="md-cancel-btn"><i class="ph-bold ph-x"></i> Cancel</button>`;
-    } else {
+    } else if (canEditMetadata()) {
       html += '<span class="md-actions-spacer"></span>';
       html += `<button class="md-action-btn" id="md-edit-btn"><i class="ph-bold ph-pencil-simple"></i> Edit</button>`;
     }
     html += '</div>';
 
-    // Provider actions row
+    // Provider actions row — admin-only mutations.
     if (provider && !editMode) {
       const providerLabel = provider.name.charAt(0).toUpperCase() + provider.name.slice(1);
       html += '<div class="md-actions">';
       html += `<span class="md-provider-link"><i class="ph-bold ph-link"></i> Linked to ${escapeHtml(providerLabel)}</span>`;
-      html += `<button class="md-action-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>`;
-      html += `<button class="md-action-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i> Re-link</button>`;
-      html += '<span class="md-actions-spacer"></span>';
-      html += `<button class="md-action-btn md-danger-btn" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i> Reset</button>`;
-      html += `<button class="md-action-btn md-danger-btn" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i> Unlink</button>`;
+      if (canEditMetadata()) {
+        html += `<button class="md-action-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i> Refresh</button>`;
+        html += `<button class="md-action-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i> Re-link</button>`;
+        html += '<span class="md-actions-spacer"></span>';
+        html += `<button class="md-action-btn md-danger-btn" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i> Reset</button>`;
+        html += `<button class="md-action-btn md-danger-btn" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i> Unlink</button>`;
+      }
       html += '</div>';
     }
 
@@ -455,16 +436,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         '<div class="md-edit-save-note"><i class="ph-bold ph-info"></i> Edited fields are automatically locked to prevent provider overwrite.</div>';
     }
 
-    // Alternative titles
+    // Alternative titles — read-only in edit mode (collection editing not persisted yet).
     if (editMode) {
-      html += `<div class="md-section-label">Alternative Titles${lockIconHtml(locks.titles, 'titles_lock')}</div>`;
-      html += '<div class="md-edit-collection" id="md-edit-titles">';
-      (md.titles || []).forEach((t, i) => {
-        html += renderAltTitleRow(t, i);
-      });
-      html += `<button class="md-add-row-btn" id="md-add-title-btn" type="button"><i class="ph-bold ph-plus"></i> Add Title</button>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
-      html += '</div>';
+      if (md.titles && md.titles.length > 0) {
+        html += `<div class="md-section-label">Alternative Titles${lockIconHtml(locks.titles, 'titles_lock')}</div>`;
+        html += '<div class="md-edit-collection">';
+        md.titles.forEach(t => {
+          const lang = t.language ? ` (${escapeHtml(t.language)})` : '';
+          const type = t.type ? ` — ${escapeHtml(t.type)}` : '';
+          html += `<div class="md-title-view-row">${escapeHtml(t.title)}${type}${lang}</div>`;
+        });
+        html += `<div class="md-edit-note">Collection editing is not supported yet — this list will not be modified when you save.</div>`;
+        html += '</div>';
+      }
     } else if (md.titles && md.titles.length > 0) {
       html += '<div class="md-alt-titles">';
       html += `<button class="md-alt-titles-toggle" data-expanded="false">`;
@@ -594,16 +578,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += '</div>';
     }
 
-    // Authors
+    // Authors — read-only in edit mode (collection editing not persisted yet).
     html += `<div class="md-section-label">Authors${lockIconHtml(locks.authors, 'authors_lock')}</div>`;
     if (editMode) {
-      html += '<div class="md-edit-collection" id="md-edit-authors">';
-      (md.authors || []).forEach((a, i) => {
-        html += renderAuthorRow(a, i);
-      });
-      html += `<button class="md-add-row-btn" id="md-add-author-btn" type="button"><i class="ph-bold ph-plus"></i> Add Author</button>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
-      html += '</div>';
+      if (md.authors && md.authors.length > 0) {
+        html += '<div class="md-edit-collection">';
+        const groupsE = {};
+        md.authors.forEach(a => {
+          const role = a.role || 'Other';
+          if (!groupsE[role]) groupsE[role] = [];
+          groupsE[role].push(a.name);
+        });
+        Object.entries(groupsE).forEach(([role, names]) => {
+          html += '<div class="md-author-group">';
+          html += `<div class="md-author-role">${escapeHtml(formatAuthorRole(role))}</div>`;
+          names.forEach(name => {
+            html += `<div class="md-author-name">${escapeHtml(name)}</div>`;
+          });
+          html += '</div>';
+        });
+        html += `<div class="md-edit-note">Collection editing is not supported yet — this list will not be modified when you save.</div>`;
+        html += '</div>';
+      }
     } else if (md.authors && md.authors.length > 0) {
       html += '<div class="md-authors">';
       const groups = {};
@@ -623,16 +619,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       html += '</div>';
     }
 
-    // Links
+    // Links — read-only in edit mode (collection editing not persisted yet).
     html += `<div class="md-section-label">Links${lockIconHtml(locks.links, 'links_lock')}</div>`;
     if (editMode) {
-      html += '<div class="md-edit-collection" id="md-edit-links">';
-      (md.links || []).forEach((l, i) => {
-        html += renderLinkRow(l, i);
-      });
-      html += `<button class="md-add-row-btn" id="md-add-link-btn" type="button"><i class="ph-bold ph-plus"></i> Add Link</button>`;
-      html += `<div class="md-edit-note">Collection editing not yet supported by the API — changes will not be saved.</div>`;
-      html += '</div>';
+      if (md.links && md.links.length > 0) {
+        html += '<div class="md-edit-collection">';
+        md.links.forEach(link => {
+          html += `<a class="md-ext-link" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">`;
+          html += `<i class="ph-bold ph-arrow-square-out"></i> ${escapeHtml(link.label)}`;
+          html += '</a>';
+        });
+        html += `<div class="md-edit-note">Collection editing is not supported yet — this list will not be modified when you save.</div>`;
+        html += '</div>';
+      }
     } else if (md.links && md.links.length > 0) {
       html += '<div class="md-links">';
       md.links.forEach(link => {
@@ -777,6 +776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const enterEditMode = folderId => {
+    if (!canEditMetadata()) return;
     if (!mdOriginalMetadata) return;
     mdEditMode = true;
     const md = mdOriginalMetadata;
@@ -797,6 +797,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleMetadataSave = async folderId => {
+    if (!canEditMetadata()) return;
     if (!mdOriginalMetadata) return;
     const orig = mdOriginalMetadata;
 
@@ -852,13 +853,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     numericFields.forEach(field => {
       const val = getVal(field);
       if (val === undefined) return;
-      const origVal = orig[field] !== null && orig[field] !== undefined ? String(orig[field]) : '';
-      if (val !== origVal) {
-        if (val === '') {
-          body[field] = null;
-        } else {
-          body[field] = field === 'community_score' ? parseFloat(val) : parseInt(val, 10);
-        }
+      const origRaw = orig[field];
+      const origMissing = origRaw === null || origRaw === undefined;
+      const nextMissing = val === '';
+      if (origMissing && nextMissing) return;
+      if (origMissing !== nextMissing) {
+        body[field] = nextMissing
+          ? null
+          : field === 'community_score'
+            ? parseFloat(val)
+            : parseInt(val, 10);
+        return;
+      }
+      // Both sides have a value — compare numerically so 7 === 7.0.
+      const nextNum = field === 'community_score' ? parseFloat(val) : parseInt(val, 10);
+      const origNum = Number(origRaw);
+      if (nextNum !== origNum) {
+        body[field] = nextNum;
       }
     });
 
@@ -888,11 +899,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw new Error(errData.error || `Save failed (HTTP ${res.status})`);
       }
 
-      // Optimistically flip lock icons for edited fields so the UI reflects
-      // the server's auto-lock behavior immediately, without waiting for the
-      // re-fetch below. release_year/month/day all share release_date_lock.
+      // Optimistically flip lock icons AND update the in-memory locks so a
+      // Cancel-then-Edit before the trailing re-fetch completes shows the
+      // post-save state, not the pre-save one. release_year/month/day all
+      // share release_date_lock.
+      const patchedLocks =
+        mdOriginalMetadata && mdOriginalMetadata.locks ? { ...mdOriginalMetadata.locks } : {};
       Object.keys(body).forEach(field => {
         const lockKey = fieldToLockKey(field);
+        const responseKey = lockFieldToResponseKey(lockKey);
+        patchedLocks[responseKey] = true;
         const icon = metadataPanel.querySelector(`.md-lock-toggle[data-lock-field="${lockKey}"]`);
         if (icon) {
           icon.dataset.locked = 'true';
@@ -900,6 +916,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           icon.title = "Locked: this field won't be changed on refresh";
         }
       });
+      if (mdOriginalMetadata) {
+        mdOriginalMetadata.locks = patchedLocks;
+      }
 
       toast.success('Metadata saved');
       mdEditMode = false;
@@ -917,12 +936,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fetchAndRenderMetadataPanel = async folderId => {
     if (!folderId || !metadataPanel || !noMetadataPrompt) return;
 
+    // Cancel any in-flight fetch for a previous folder so its late response
+    // cannot overwrite the panel for the current folder.
+    if (mdInFlightController) {
+      mdInFlightController.abort();
+    }
+    const controller = new AbortController();
+    mdInFlightController = controller;
+    mdInFlightFolderId = folderId;
+
     try {
-      const res = await fetch(`/api/folders/${folderId}/metadata`);
+      const res = await fetch(`/api/folders/${folderId}/metadata`, {
+        signal: controller.signal,
+      });
+
+      // If a newer fetch replaced us mid-flight, drop this response silently.
+      if (mdInFlightFolderId !== folderId || mdInFlightController !== controller) {
+        return;
+      }
 
       if (res.status === 404) {
         metadataPanel.style.display = 'none';
-        noMetadataPrompt.style.display = 'block';
+        metadataPanel.innerHTML = '';
+        noMetadataPrompt.style.display = canEditMetadata() ? 'block' : 'none';
         mdOriginalMetadata = null;
         mdOriginalProvider = null;
         mdEditMode = false;
@@ -934,11 +970,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const data = await res.json();
+      // Re-check after the second await: a rapid folder switch may have raced past.
+      if (mdInFlightFolderId !== folderId || mdInFlightController !== controller) {
+        return;
+      }
       const md = data.metadata;
       const locks = md.locks || {};
       const provider = data.provider;
 
-      // Store original for diff/cancel
       mdOriginalMetadata = md;
       mdOriginalProvider = provider;
       mdEditMode = false;
@@ -950,7 +989,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!html.trim() && !provider) {
         metadataPanel.style.display = 'none';
         metadataPanel.innerHTML = '';
-        noMetadataPrompt.style.display = 'block';
+        noMetadataPrompt.style.display = canEditMetadata() ? 'block' : 'none';
         return;
       }
 
@@ -959,18 +998,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       attachPanelListeners(folderId, false);
     } catch (error) {
+      // AbortError from folder navigation is expected and not an error.
+      if (error && error.name === 'AbortError') return;
+      if (mdInFlightFolderId !== folderId || mdInFlightController !== controller) return;
       console.error('Error fetching metadata:', error);
       toast.error('Failed to load metadata');
+    } finally {
+      if (mdInFlightController === controller) {
+        mdInFlightController = null;
+      }
     }
   };
 
   const openMetadataSearchModal = () => {
+    if (!canEditMetadata()) return;
     mdSelectedResult = null;
     mdLinkBtn.disabled = true;
     mdSearchResults.innerHTML = '';
     mdSearchError.style.display = 'none';
     mdSearchLoading.style.display = 'none';
-    mdSearchInput.value = pageTitleEl.textContent || '';
+    // Seed from the folder name (data.current_folder.name captured via
+    // state.currentFolderName) rather than the decorated page title, which may
+    // include chapter counts or other visible-only text that degrades matching.
+    mdSearchInput.value = state.currentFolderName || pageTitleEl.textContent || '';
     metadataSearchModal.style.display = 'flex';
     mdSearchInput.focus();
     mdSearchInput.select();
@@ -1038,6 +1088,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleMetadataLink = async () => {
+    if (!canEditMetadata()) return;
     if (!mdSelectedResult || !state.currentFolderId) return;
 
     mdLinkBtn.disabled = true;
@@ -1073,6 +1124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleMetadataRefresh = async folderId => {
+    if (!canEditMetadata()) return;
     const refreshBtn = metadataPanel.querySelector('#md-refresh-btn');
     if (refreshBtn) {
       refreshBtn.disabled = true;
@@ -1100,6 +1152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleMetadataReset = async folderId => {
+    if (!canEditMetadata()) return;
     if (!confirm('This will clear all metadata but keep the provider link. Continue?')) return;
 
     try {
@@ -1118,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleMetadataUnlink = async folderId => {
+    if (!canEditMetadata()) return;
     if (!confirm('This will remove all metadata AND the provider link. Continue?')) return;
 
     try {
@@ -1426,11 +1480,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (data.current_folder) {
         pageTitleEl.textContent = data.current_folder.name;
+        state.currentFolderName = data.current_folder.name;
       } else if (state.currentTagId) {
+        state.currentFolderName = null;
         const tagName = await getTagNameFromId(state.currentTagId);
         pageTitleEl.textContent = `Tag: ${tagName}`;
         document.title = `Tag: ${tagName} - Mango`;
       } else {
+        state.currentFolderName = null;
         pageTitleEl.textContent = 'Library';
       }
       document.title = `${pageTitleEl.textContent} - Mango`;
@@ -1754,16 +1811,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  linkMetadataBtn.addEventListener('click', openMetadataSearchModal);
-
-  mdSearchBtn.addEventListener('click', performMetadataSearch);
-  mdSearchInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      performMetadataSearch();
-    }
-  });
-  mdLinkBtn.addEventListener('click', handleMetadataLink);
+  if (canEditMetadata()) {
+    linkMetadataBtn.addEventListener('click', openMetadataSearchModal);
+    mdSearchBtn.addEventListener('click', performMetadataSearch);
+    mdSearchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        performMetadataSearch();
+      }
+    });
+    mdLinkBtn.addEventListener('click', handleMetadataLink);
+  }
   mdSearchCloseBtn.addEventListener('click', closeMetadataSearchModal);
   mdSearchCancelBtn.addEventListener('click', closeMetadataSearchModal);
   metadataSearchModal.addEventListener('click', e => {

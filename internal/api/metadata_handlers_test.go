@@ -66,7 +66,7 @@ func setupMetadataTestData(t *testing.T) (*api.Server, http.Handler, *http.Cooki
 	t.Helper()
 	server, _, _ := testutil.SetupTestServer(t)
 	router := server.Router()
-	cookie := testutil.GetAuthCookie(t, server, "metauser", "pw", "user")
+	cookie := testutil.GetAuthCookie(t, server, "metauser", "pw", "admin")
 	return server, router, cookie
 }
 
@@ -1307,5 +1307,190 @@ func TestHandleEditLocks_ReturnsFullLockState(t *testing.T) {
 	}
 	if status, ok := resp["status"].(bool); !ok || status {
 		t.Errorf("status should be false, got %v", resp["status"])
+	}
+}
+
+func TestMetadataMutations_AdminOnly(t *testing.T) {
+	server, _, _ := testutil.SetupTestServer(t)
+	userCookie := testutil.GetAuthCookie(t, server, "nonadmin", "pw", "user")
+	adminCookie := testutil.GetAuthCookie(t, server, "admin", "pw", "admin")
+	router := server.Router()
+
+	folder, _ := server.Store().CreateFolder("/library/AdminGate", "AdminGate", nil)
+	if err := server.Store().UpsertProviderLink(folder.ID, "anilist", "20"); err != nil {
+		t.Fatalf("UpsertProviderLink: %v", err)
+	}
+	title := "Seed Title"
+	if err := server.Store().UpsertSeriesMetadata(folder.ID, &metadata.SeriesMetadata{Title: &title}); err != nil {
+		t.Fatalf("UpsertSeriesMetadata: %v", err)
+	}
+	server.SetMetadataProvider(&mockMetadataProvider{
+		seriesMeta:    newTestMeta(),
+		coverURL:      "https://img.example/cover.jpg",
+		searchResults: []metadata.SeriesSearchResult{{ResultID: "20", Title: "R", ProviderName: "anilist"}},
+	})
+
+	type route struct {
+		name    string
+		method  string
+		path    string
+		body    string
+		okCodes []int
+	}
+	routes := []route{
+		{"link", "POST", "/api/folders/%d/metadata/link", `{"provider_name":"anilist","provider_id":"20"}`, []int{http.StatusOK}},
+		{"refresh", "POST", "/api/folders/%d/metadata/refresh", "", []int{http.StatusOK}},
+		{"reset", "POST", "/api/folders/%d/metadata/reset", "", []int{http.StatusOK}},
+		{"edit-metadata", "PATCH", "/api/folders/%d/metadata", `{"title":"New Title"}`, []int{http.StatusOK}},
+		{"edit-locks", "PATCH", "/api/folders/%d/metadata/locks", `{"title_lock":true}`, []int{http.StatusOK}},
+		{"unlink", "POST", "/api/folders/%d/metadata/unlink", "", []int{http.StatusOK}},
+	}
+
+	for _, r := range routes {
+		t.Run(r.name+"/non-admin-403", func(t *testing.T) {
+			var body *strings.Reader
+			if r.body != "" {
+				body = strings.NewReader(r.body)
+			}
+			var req *http.Request
+			path := fmt.Sprintf(r.path, folder.ID)
+			if body != nil {
+				req, _ = http.NewRequest(r.method, path, body)
+			} else {
+				req, _ = http.NewRequest(r.method, path, nil)
+			}
+			req.AddCookie(userCookie)
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+			if rr.Code != http.StatusForbidden {
+				t.Errorf("%s %s with user cookie: expected 403, got %d body=%s", r.method, path, rr.Code, rr.Body.String())
+			}
+		})
+
+		t.Run(r.name+"/admin-ok", func(t *testing.T) {
+			var body *strings.Reader
+			if r.body != "" {
+				body = strings.NewReader(r.body)
+			}
+			var req *http.Request
+			path := fmt.Sprintf(r.path, folder.ID)
+			if body != nil {
+				req, _ = http.NewRequest(r.method, path, body)
+			} else {
+				req, _ = http.NewRequest(r.method, path, nil)
+			}
+			req.AddCookie(adminCookie)
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+			ok := false
+			for _, c := range r.okCodes {
+				if rr.Code == c {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				t.Errorf("%s %s with admin cookie: expected one of %v, got %d body=%s", r.method, path, r.okCodes, rr.Code, rr.Body.String())
+			}
+		})
+	}
+
+	t.Run("search/non-admin-403", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/metadata/search?q=test", nil)
+		req.AddCookie(userCookie)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("GET /api/metadata/search with user cookie: expected 403, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+	t.Run("search/admin-ok", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/metadata/search?q=test", nil)
+		req.AddCookie(adminCookie)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("GET /api/metadata/search with admin cookie: expected 200, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("get-metadata/user-ok", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/api/folders/%d/metadata", folder.ID), nil)
+		req.AddCookie(userCookie)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code == http.StatusForbidden {
+			t.Errorf("GET metadata should be open to authenticated users, got 403")
+		}
+	})
+}
+
+func TestHandleLinkMetadata_PreservesLocksOnRelink(t *testing.T) {
+	server, _, _ := testutil.SetupTestServer(t)
+	router := server.Router()
+	adminCookie := testutil.GetAuthCookie(t, server, "admin", "pw", "admin")
+	folder, _ := server.Store().CreateFolder("/library/RelinkPreserve", "RelinkPreserve", nil)
+
+	firstTitle := "First Provider Title"
+	firstScore := 5.5
+	firstMeta := &metadata.SeriesMetadata{
+		Title:          &firstTitle,
+		CommunityScore: &firstScore,
+		Genres:         []string{"Action"},
+	}
+	server.SetMetadataProvider(&mockMetadataProvider{
+		seriesMeta: firstMeta,
+		coverURL:   "https://img.example/first.jpg",
+	})
+	body := `{"provider_name":"anilist","provider_id":"100"}`
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body))
+	req.AddCookie(adminCookie)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("initial link: expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	if err := server.Store().UpdateMetadataLocks(folder.ID, map[string]bool{"title_lock": true}); err != nil {
+		t.Fatalf("UpdateMetadataLocks: %v", err)
+	}
+
+	secondTitle := "Second Provider Title"
+	secondScore := 9.5
+	secondMeta := &metadata.SeriesMetadata{
+		Title:          &secondTitle,
+		CommunityScore: &secondScore,
+		Genres:         []string{"Drama"},
+	}
+	server.SetMetadataProvider(&mockMetadataProvider{
+		seriesMeta: secondMeta,
+		coverURL:   "https://img.example/second.jpg",
+	})
+	body2 := `{"provider_name":"anilist","provider_id":"200"}`
+	req2, _ := http.NewRequest("POST", fmt.Sprintf("/api/folders/%d/metadata/link", folder.ID), strings.NewReader(body2))
+	req2.AddCookie(adminCookie)
+	rr2 := httptest.NewRecorder()
+	router.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("relink: expected 200, got %d body=%s", rr2.Code, rr2.Body.String())
+	}
+
+	row, err := server.Store().GetSeriesMetadata(folder.ID)
+	if err != nil {
+		t.Fatalf("GetSeriesMetadata: %v", err)
+	}
+	if !row.Title.Valid || row.Title.String != firstTitle {
+		t.Errorf("locked title should be preserved: want %q got valid=%v value=%q", firstTitle, row.Title.Valid, row.Title.String)
+	}
+	if !row.CommunityScore.Valid || row.CommunityScore.Float64 != secondScore {
+		t.Errorf("unlocked community_score should update to second provider value: want %v got valid=%v value=%v", secondScore, row.CommunityScore.Valid, row.CommunityScore.Float64)
+	}
+
+	link, err := server.Store().GetProviderLink(folder.ID)
+	if err != nil {
+		t.Fatalf("GetProviderLink: %v", err)
+	}
+	if link == nil || link.ProviderID != "200" {
+		t.Errorf("provider_id should be 200 after relink, got %+v", link)
 	}
 }
