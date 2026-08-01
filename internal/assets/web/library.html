@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/static/css/ext/phosphor-icons.css">
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/library.css">
+    <link rel="stylesheet" href="/static/css/metadata-panel.css">
 </head>
 
 <body>
@@ -73,6 +74,14 @@
             </div>
         </div>
 
+        <div class="metadata-panel" id="metadata-panel" style="display: none;"></div>
+        <div class="no-metadata-prompt" id="no-metadata-prompt" style="display: none;">
+            <p>No metadata linked. Search for metadata to get started.</p>
+            <button class="link-metadata-btn" id="link-metadata-btn">
+                <i class="ph-bold ph-magnifying-glass"></i> Search Metadata
+            </button>
+        </div>
+
         <span id="total-count" class="total-count"></span>
         <div class="library-controls">
             <div class="search-bar">
@@ -128,6 +137,36 @@
             </div>
             <div class="modal-footer">
                 <button id="modal-cancel-btn" class="cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata Search Modal -->
+    <div class="modal-overlay md-search-modal" id="metadata-search-modal">
+        <div class="modal-content md-search-modal-content">
+            <div class="modal-header">
+                <h2>Search Metadata</h2>
+                <button class="modal-close-btn" id="md-search-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="md-search-input-row">
+                    <input type="text" id="md-search-input" class="md-search-input" placeholder="Search by title..." autocomplete="off">
+                    <button id="md-search-btn" class="md-search-btn">
+                        <i class="ph-bold ph-magnifying-glass"></i> Search
+                    </button>
+                </div>
+                <div class="md-search-error" id="md-search-error" style="display: none;"></div>
+                <div class="md-search-loading" id="md-search-loading" style="display: none;">
+                    <div class="md-spinner"></div>
+                    <span>Searching...</span>
+                </div>
+                <div class="md-search-results" id="md-search-results"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="md-search-cancel-btn" class="cancel-btn">Cancel</button>
+                <button id="md-link-btn" class="md-link-btn" disabled>
+                    <i class="ph-bold ph-link"></i> Link
+                </button>
             </div>
         </div>
     </div>

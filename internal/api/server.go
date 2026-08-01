@@ -64,7 +64,7 @@ func NewServer(app *core.App) *Server {
 	provider := metadataanilist.NewAniListProvider(
 		anilistClient,
 		cfg.Metadata.AniList.ExcludeSpoilerTags,
-		cfg.Metadata.CoverFailureMode,
+		metadataanilist.CoverFailureMode(cfg.Metadata.CoverFailureMode),
 	)
 	return &Server{
 		app:              app,
@@ -115,16 +115,20 @@ func (s *Server) Router() http.Handler {
 			r.Get("/folders/{folderID}/anilist", s.handleGetFolderAnilist)
 			r.Post("/folders/{folderID}/anilist", s.handlePostFolderAnilist)
 			r.Get("/folders/{folderID}/metadata", s.handleGetMetadata)
-			r.Post("/folders/{folderID}/metadata/link", s.handleLinkMetadata)
-			r.Post("/folders/{folderID}/metadata/refresh", s.handleRefreshMetadata)
-			r.Post("/folders/{folderID}/metadata/reset", s.handleResetMetadata)
-			r.Post("/folders/{folderID}/metadata/unlink", s.handleUnlinkMetadata)
-			r.Patch("/folders/{folderID}/metadata", s.handleEditMetadata)
-			r.Patch("/folders/{folderID}/metadata/locks", s.handleEditLocks)
+			// Metadata mutations are admin-only. Read stays open to all authenticated users.
+			r.Group(func(r chi.Router) {
+				r.Use(s.AdminOnlyMiddleware)
+				r.Post("/folders/{folderID}/metadata/link", s.handleLinkMetadata)
+				r.Post("/folders/{folderID}/metadata/refresh", s.handleRefreshMetadata)
+				r.Post("/folders/{folderID}/metadata/reset", s.handleResetMetadata)
+				r.Post("/folders/{folderID}/metadata/unlink", s.handleUnlinkMetadata)
+				r.Patch("/folders/{folderID}/metadata", s.handleEditMetadata)
+				r.Patch("/folders/{folderID}/metadata/locks", s.handleEditLocks)
+			})
 			r.Get("/folders/{folderID}/chapters/{chapterID}/neighbors", s.handleGetChapterNeighbors)
 
-			// Metadata Search
-			r.Get("/metadata/search", s.handleSearchMetadata)
+			// Metadata Search — admin-only (used only by the link/relink flow).
+			r.With(s.AdminOnlyMiddleware).Get("/metadata/search", s.handleSearchMetadata)
 
 			r.Get("/chapters/{chapterID}", s.handleGetChapterDetails)
 			r.Post("/chapters/{chapterID}/progress", s.handleUpdateProgress)

@@ -9,14 +9,14 @@ import (
 	"github.com/vrsandeep/mango-go/internal/testutil"
 )
 
+var testPasswordHash = testutil.MustHashPassword("password123")
+
 func TestUserStore_CreateAndGet(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 
-	passwordHash, _ := auth.HashPassword("password123")
-
 	t.Run("Create User Success", func(t *testing.T) {
-		user, err := s.CreateUser("testuser", passwordHash, "user")
+		user, err := s.CreateUser("testuser", testPasswordHash, "user")
 		if err != nil {
 			t.Fatalf("CreateUser failed: %v", err)
 		}
@@ -26,7 +26,7 @@ func TestUserStore_CreateAndGet(t *testing.T) {
 	})
 
 	t.Run("Create User with Duplicate Username", func(t *testing.T) {
-		_, err := s.CreateUser("testuser", passwordHash, "user")
+		_, err := s.CreateUser("testuser", testPasswordHash, "user")
 		if err == nil {
 			t.Fatal("Expected error when creating user with duplicate username, but got nil")
 		}
@@ -57,8 +57,7 @@ func TestUserStore_UpdateAndDelete(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
 
-	passwordHash, _ := auth.HashPassword("password123")
-	user, _ := s.CreateUser("userToUpdate", passwordHash, "user")
+	user, _ := s.CreateUser("userToUpdate", testPasswordHash, "user")
 
 	t.Run("Update User Info", func(t *testing.T) {
 		err := s.UpdateUser(user.ID, "updatedUsername", "admin")
@@ -98,8 +97,7 @@ func TestUserStore_UpdateAndDelete(t *testing.T) {
 func TestUserStore_Sessions(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	s := store.New(db)
-	passwordHash, _ := auth.HashPassword("password123")
-	user, _ := s.CreateUser("sessionuser", passwordHash, "user")
+	user, _ := s.CreateUser("sessionuser", testPasswordHash, "user")
 
 	t.Run("Create and Get Session", func(t *testing.T) {
 		token, err := s.CreateSession(user.ID)
@@ -159,9 +157,8 @@ func TestUserStore_ListAndCount(t *testing.T) {
 		t.Errorf("Expected 0 users, got %d", count)
 	}
 
-	passwordHash, _ := auth.HashPassword("password123")
-	s.CreateUser("user1", passwordHash, "user")
-	s.CreateUser("user2", passwordHash, "admin")
+	s.CreateUser("user1", testPasswordHash, "user")
+	s.CreateUser("user2", testPasswordHash, "admin")
 
 	users, err := s.ListUsers()
 	if err != nil {
