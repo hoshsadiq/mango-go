@@ -59,6 +59,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mdSearchError = document.getElementById('md-search-error');
   const mdLinkBtn = document.getElementById('md-link-btn');
   const linkMetadataBtn = document.getElementById('link-metadata-btn');
+  const chapterTypeFilter = document.getElementById('chapter-type-filter');
+  const chapterGroupFilter = document.getElementById('chapter-group-filter');
+  const viewToggle = document.getElementById('view-toggle');
+  const viewListBtn = document.getElementById('view-list-btn');
+  const viewGridBtn = document.getElementById('view-grid-btn');
+  const chapterDrawer = document.getElementById('chapter-drawer');
+  const chapterDrawerBackdrop = document.getElementById('chapter-drawer-backdrop');
+  const chapterDrawerTitle = document.getElementById('chapter-drawer-title');
+  const chapterDrawerBody = document.getElementById('chapter-drawer-body');
+  const chapterDrawerClose = document.getElementById('chapter-drawer-close');
+  const selectChaptersBtn = document.getElementById('select-chapters-btn');
+  const bulkActionBar = document.getElementById('bulk-action-bar');
+  const bulkActionCount = document.getElementById('bulk-action-count');
+  const bulkEditBtn = document.getElementById('bulk-edit-btn');
+  const bulkCancelBtn = document.getElementById('bulk-cancel-btn');
+  const bulkEditModal = document.getElementById('bulk-edit-modal');
+  const bulkEditCloseBtn = document.getElementById('bulk-edit-close-btn');
+  const bulkEditCancelBtn = document.getElementById('bulk-edit-cancel-btn');
+  const bulkEditSaveBtn = document.getElementById('bulk-edit-save-btn');
+  const chapterEditModal = document.getElementById('chapter-edit-modal');
+  const chapterEditBody = document.getElementById('chapter-edit-body');
+  const chapterEditSaveBtn = document.getElementById('chapter-edit-save-btn');
+  const chapterEditCancelBtn = document.getElementById('chapter-edit-cancel-btn');
+  const chapterEditCloseBtn = document.getElementById('chapter-edit-close-btn');
 
   // --- State Management ---
   let state = {
@@ -74,7 +98,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     totalItems: 0,
     perPage: 100,
     currentRating: null,
+    chapterViewMode: localStorage.getItem('chapterViewMode') || 'list',
+    chapterTypeFilterValue: '',
+    chapterGroupFilterValue: '',
   };
+  let chapterMetadataCache = {};
+  let currentChapters = [];
   let allTags = [];
   let currentFolderTags = [];
   let tagsExpanded = false;
@@ -84,6 +113,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   let mdOriginalProvider = null;
   let mdEditMode = false;
   let originalFolderName = '';
+  let selectionMode = false;
+  let selectedChapterIds = new Set();
+  let chapterEditChapterId = null;
+  let chapterEditOriginalMeta = null;
+  const CHAPTER_TYPES = ['Regular', 'Special', 'Bonus', 'Omake', 'One-Shot', 'Annual', 'Omnibus'];
   const TAGS_COLLAPSED_LIMIT = 8;
   const FILTER_CHIPS_LIMIT = 10;
 
@@ -1263,15 +1297,1188 @@ document.addEventListener('DOMContentLoaded', async () => {
     breadcrumbEl.innerHTML = html;
   };
 
-  // Renders the grid with folders first, then chapters.
+  const formatChapterTitle = (meta, chapter) => {
+    if (meta && meta.number) return `Chapter ${meta.number}`;
+    if (meta && meta.title) return meta.title;
+    return chapter.path
+      .split(/[\\\\/]/)
+      .pop()
+      .replace(/\.[^.]+$/, '');
+  };
+
+  const formatChapterReleaseDate = dateStr => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(d);
+  };
+
+  const NON_REGULAR_TYPES = ['Special', 'Bonus', 'Omake', 'One-Shot'];
+
+  const parseChapterReleaseDate = dateStr => {
+    if (!dateStr) return { year: '', month: '', day: '' };
+    const parts = dateStr.split('-');
+    return {
+      year: parts[0] || '',
+      month: parts[1] ? String(parseInt(parts[1], 10)) : '',
+      day: parts[2] ? String(parseInt(parts[2], 10)) : '',
+    };
+  };
+
+  const buildChapterReleaseDate = (year, month, day) => {
+    if (!year) return null;
+    let date = String(year);
+    if (month) {
+      date += '-' + String(month).padStart(2, '0');
+      if (day) {
+        date += '-' + String(day).padStart(2, '0');
+      }
+    }
+    return date;
+  };
+
+  const buildChapterEditFormHtml = (meta, locks) => {
+    let html = '';
+    html +=
+      '<div class="md-edit-save-note"><i class="ph-bold ph-info"></i> Edited fields are auto-locked to prevent overwrite on rescan.</div>';
+
+    html += '<div class="ce-section-title">Basic Info</div>';
+    html += '<div class="ce-form-grid">';
+
+    html += `<div class="ce-field ce-field-full"><label class="ce-field-label">Title${lockIconHtml(locks.title, 'title_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="title" value="${escapeHtml(meta.title || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Number${lockIconHtml(locks.number, 'number_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="number" value="${escapeHtml(meta.number || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Sort #${lockIconHtml(locks.sort_number, 'sort_number_lock')}</label>`;
+    html += `<input type="number" class="md-edit-input" data-field="sort_number" step="0.1" value="${meta.sort_number != null ? meta.sort_number : ''}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Volume${lockIconHtml(locks.volume, 'volume_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="volume" value="${escapeHtml(meta.volume || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Type${lockIconHtml(locks.chapter_type, 'chapter_type_lock')}</label>`;
+    html += '<select class="md-edit-select" data-field="chapter_type">';
+    html += `<option value=""${!meta.chapter_type ? ' selected' : ''}>— None —</option>`;
+    CHAPTER_TYPES.forEach(t => {
+      html += `<option value="${t}"${meta.chapter_type === t ? ' selected' : ''}>${t}</option>`;
+    });
+    html += '</select></div>';
+
+    html += '</div>';
+
+    html += '<div class="ce-section-title">Publication</div>';
+    html += '<div class="ce-form-grid">';
+
+    const rd = parseChapterReleaseDate(meta.release_date);
+    html += `<div class="ce-field ce-field-full"><label class="ce-field-label">Release Date${lockIconHtml(locks.release_date, 'release_date_lock')}</label>`;
+    html += '<div class="ce-date-row">';
+    html += `<input type="number" class="md-edit-input md-date-input" data-field="release_year" min="1000" max="9999" step="1" value="${rd.year}" placeholder="Year">`;
+    html += `<input type="number" class="md-edit-input md-date-input" data-field="release_month" min="1" max="12" step="1" value="${rd.month}" placeholder="Mo">`;
+    html += `<input type="number" class="md-edit-input md-date-input" data-field="release_day" min="1" max="31" step="1" value="${rd.day}" placeholder="Day">`;
+    html += '</div></div>';
+
+    html += `<div class="ce-field"><label class="ce-field-label">Language${lockIconHtml(locks.language, 'language_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="language" value="${escapeHtml(meta.language || '')}" placeholder="e.g. en"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Group${lockIconHtml(locks.scanlation_group, 'scanlation_group_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="scanlation_group" value="${escapeHtml(meta.scanlation_group || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Age Rating${lockIconHtml(locks.age_rating, 'age_rating_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="age_rating" value="${escapeHtml(meta.age_rating || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Web${lockIconHtml(locks.web, 'web_lock')}</label>`;
+    html += `<input type="url" class="md-edit-input" data-field="web" value="${escapeHtml(meta.web || '')}" placeholder="https://..."></div>`;
+
+    html += '</div>';
+
+    html += '<div class="ce-section-title">Content</div>';
+
+    html += `<div class="ce-field" style="margin-bottom:0.75rem"><label class="ce-field-label">Summary${lockIconHtml(locks.summary, 'summary_lock')}</label>`;
+    html += `<textarea class="md-edit-textarea" data-field="summary" rows="3" placeholder="Summary">${escapeHtml(meta.summary || '')}</textarea></div>`;
+
+    html += `<div class="ce-field" style="margin-bottom:0.75rem"><label class="ce-field-label">Notes${lockIconHtml(locks.notes, 'notes_lock')}</label>`;
+    html += `<textarea class="md-edit-textarea" data-field="notes" rows="2" placeholder="Notes">${escapeHtml(meta.notes || '')}</textarea></div>`;
+
+    html += '<div class="ce-section-title">Story</div>';
+    html += '<div class="ce-form-grid">';
+
+    html += `<div class="ce-field ce-field-full"><label class="ce-field-label">Characters${lockIconHtml(locks.characters, 'characters_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="characters" value="${escapeHtml(meta.characters || '')}" placeholder="Comma separated"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Teams${lockIconHtml(locks.teams, 'teams_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="teams" value="${escapeHtml(meta.teams || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Locations${lockIconHtml(locks.locations, 'locations_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="locations" value="${escapeHtml(meta.locations || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Story Arc${lockIconHtml(locks.story_arc, 'story_arc_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="story_arc" value="${escapeHtml(meta.story_arc || '')}"></div>`;
+
+    html += `<div class="ce-field"><label class="ce-field-label">Arc #${lockIconHtml(locks.story_arc_number, 'story_arc_number_lock')}</label>`;
+    html += `<input type="text" class="md-edit-input" data-field="story_arc_number" value="${escapeHtml(meta.story_arc_number || '')}"></div>`;
+
+    html += '</div>';
+
+    html += '<div class="ce-section-title">Authors</div>';
+    html += '<div class="md-edit-collection" id="ce-authors">';
+    (meta.authors || []).forEach((a, i) => {
+      html += renderAuthorRow(a, i);
+    });
+    html +=
+      '<button class="md-add-row-btn" id="ce-add-author-btn" type="button"><i class="ph-bold ph-plus"></i> Add Author</button>';
+    html += '</div>';
+
+    html += '<div class="ce-section-title">Genres</div>';
+    html += '<div class="md-chip-input-container" id="ce-genres">';
+    html += '<div class="md-chips" id="ce-genre-chips">';
+    (meta.genres || []).forEach(g => {
+      html += `<span class="md-chip" data-value="${escapeHtml(g)}">${escapeHtml(g)}<button class="md-chip-remove" type="button">&times;</button></span>`;
+    });
+    html += '</div>';
+    html += '<div class="md-chip-add-row">';
+    html +=
+      '<input type="text" class="md-chip-new-input" id="ce-genre-input" placeholder="Add genre…">';
+    html +=
+      '<button class="md-add-row-btn" id="ce-add-genre-btn" type="button"><i class="ph-bold ph-plus"></i></button>';
+    html += '</div></div>';
+
+    html += '<div class="ce-section-title">Tags</div>';
+    html += '<div class="md-chip-input-container" id="ce-tags">';
+    html += '<div class="md-chips" id="ce-tag-chips">';
+    (meta.tags || []).forEach(t => {
+      html += `<span class="md-chip" data-value="${escapeHtml(t)}">${escapeHtml(t)}<button class="md-chip-remove" type="button">&times;</button></span>`;
+    });
+    html += '</div>';
+    html += '<div class="md-chip-add-row">';
+    html +=
+      '<input type="text" class="md-chip-new-input" id="ce-tag-input" placeholder="Add tag…">';
+    html +=
+      '<button class="md-add-row-btn" id="ce-add-tag-btn" type="button"><i class="ph-bold ph-plus"></i></button>';
+    html += '</div></div>';
+
+    return html;
+  };
+
+  const toggleChapterFieldLock = async (chapterId, lockField, currentlyLocked) => {
+    const newValue = !currentlyLocked;
+    try {
+      const res = await fetch(`/api/chapters/${chapterId}/metadata/locks`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [lockField]: newValue }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Lock toggle failed (HTTP ${res.status})`);
+      }
+      const locks = await res.json();
+      const icon = chapterEditModal.querySelector(
+        `.md-lock-toggle[data-lock-field="${lockField}"]`
+      );
+      if (icon) {
+        const isLocked = locks[lockFieldToResponseKey(lockField)];
+        icon.dataset.locked = String(isLocked);
+        icon.className = isLocked
+          ? 'ph-bold ph-lock md-lock md-lock-toggle'
+          : 'ph-bold ph-lock-open md-lock md-lock-toggle md-lock-unlocked';
+        icon.title = isLocked
+          ? "Locked: this field won't be changed on rescan"
+          : 'Unlocked: this field will be updated on rescan';
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const attachChapterEditListeners = chapterId => {
+    chapterEditModal.querySelectorAll('.md-lock-toggle').forEach(icon => {
+      icon.addEventListener('click', e => {
+        e.stopPropagation();
+        toggleChapterFieldLock(chapterId, icon.dataset.lockField, icon.dataset.locked === 'true');
+      });
+    });
+
+    const addAuthorBtn = chapterEditBody.querySelector('#ce-add-author-btn');
+    if (addAuthorBtn) {
+      addAuthorBtn.addEventListener('click', () => {
+        const container = chapterEditBody.querySelector('#ce-authors');
+        const rows = container.querySelectorAll('.md-author-edit-row');
+        const idx = rows.length;
+        addAuthorBtn.insertAdjacentHTML(
+          'beforebegin',
+          renderAuthorRow({ name: '', role: 'WRITER' }, idx)
+        );
+        const newRow = container.querySelectorAll('.md-author-edit-row')[idx];
+        newRow.querySelector('.md-row-remove').addEventListener('click', () => newRow.remove());
+      });
+    }
+
+    chapterEditBody.querySelectorAll('.md-row-remove').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('[data-idx]').remove());
+    });
+
+    const setupChipSection = (chipsId, inputId, addBtnId) => {
+      const chipsEl = chapterEditBody.querySelector(`#${chipsId}`);
+      const inputEl = chapterEditBody.querySelector(`#${inputId}`);
+      const addBtn = chapterEditBody.querySelector(`#${addBtnId}`);
+
+      const addChip = () => {
+        const val = inputEl.value.trim();
+        if (!val) return;
+        const existing = [...chipsEl.querySelectorAll('.md-chip')].map(c =>
+          c.dataset.value.toLowerCase()
+        );
+        if (existing.includes(val.toLowerCase())) return;
+        const chip = document.createElement('span');
+        chip.className = 'md-chip';
+        chip.dataset.value = val;
+        chip.innerHTML = `${escapeHtml(val)}<button class="md-chip-remove" type="button">&times;</button>`;
+        chip.querySelector('.md-chip-remove').addEventListener('click', () => chip.remove());
+        chipsEl.appendChild(chip);
+        inputEl.value = '';
+      };
+
+      if (addBtn) addBtn.addEventListener('click', addChip);
+      if (inputEl) {
+        inputEl.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addChip();
+          }
+        });
+      }
+
+      chipsEl.querySelectorAll('.md-chip-remove').forEach(btn => {
+        btn.addEventListener('click', () => btn.closest('.md-chip').remove());
+      });
+    };
+
+    setupChipSection('ce-genre-chips', 'ce-genre-input', 'ce-add-genre-btn');
+    setupChipSection('ce-tag-chips', 'ce-tag-input', 'ce-add-tag-btn');
+  };
+
+  const handleChapterEditSave = async () => {
+    if (!chapterEditChapterId || !chapterEditOriginalMeta) return;
+    const orig = chapterEditOriginalMeta;
+    const patchBody = {};
+
+    const getVal = field => {
+      const el = chapterEditBody.querySelector(`[data-field="${field}"]`);
+      return el ? el.value : undefined;
+    };
+
+    const stringFields = [
+      'title',
+      'number',
+      'volume',
+      'summary',
+      'notes',
+      'language',
+      'age_rating',
+      'web',
+      'characters',
+      'teams',
+      'locations',
+      'scanlation_group',
+      'story_arc',
+      'story_arc_number',
+    ];
+    stringFields.forEach(field => {
+      const val = getVal(field);
+      if (val === undefined) return;
+      const origVal = orig[field] || '';
+      if (val !== origVal) {
+        patchBody[field] = val === '' ? null : val;
+      }
+    });
+
+    const ctVal = getVal('chapter_type');
+    if (ctVal !== undefined) {
+      const origCt = orig.chapter_type || '';
+      if (ctVal !== origCt) {
+        patchBody.chapter_type = ctVal === '' ? null : ctVal;
+      }
+    }
+
+    const snVal = getVal('sort_number');
+    if (snVal !== undefined) {
+      const origSn = orig.sort_number != null ? String(orig.sort_number) : '';
+      if (snVal !== origSn) {
+        patchBody.sort_number = snVal === '' ? null : parseFloat(snVal);
+      }
+    }
+
+    const rdYear = getVal('release_year');
+    const rdMonth = getVal('release_month');
+    const rdDay = getVal('release_day');
+    if (rdYear !== undefined) {
+      const newDate = buildChapterReleaseDate(rdYear, rdMonth, rdDay);
+      const origDate = orig.release_date || null;
+      if (newDate !== origDate) {
+        patchBody.release_date = newDate;
+      }
+    }
+
+    const authorRows = chapterEditBody.querySelectorAll('#ce-authors .md-author-edit-row');
+    const newAuthors = [];
+    authorRows.forEach(row => {
+      const name = row.querySelector('.md-author-name-input').value.trim();
+      const role = row.querySelector('.md-author-role-select').value;
+      if (name) newAuthors.push({ name, role });
+    });
+    const origAuthors = orig.authors || [];
+    const authorsChanged =
+      newAuthors.length !== origAuthors.length ||
+      newAuthors.some((a, i) => a.name !== origAuthors[i]?.name || a.role !== origAuthors[i]?.role);
+    if (authorsChanged) {
+      patchBody.authors = newAuthors;
+    }
+
+    const genreChips = chapterEditBody.querySelectorAll('#ce-genre-chips .md-chip');
+    const newGenres = [...genreChips].map(c => c.dataset.value);
+    const origGenres = orig.genres || [];
+    if (JSON.stringify([...newGenres].sort()) !== JSON.stringify([...origGenres].sort())) {
+      patchBody.genres = newGenres;
+    }
+
+    const tagChips = chapterEditBody.querySelectorAll('#ce-tag-chips .md-chip');
+    const newTags = [...tagChips].map(c => c.dataset.value);
+    const origTags = orig.tags || [];
+    if (JSON.stringify([...newTags].sort()) !== JSON.stringify([...origTags].sort())) {
+      patchBody.tags = newTags;
+    }
+
+    if (Object.keys(patchBody).length === 0) {
+      toast.success('No changes to save');
+      closeChapterEditModal();
+      return;
+    }
+
+    chapterEditSaveBtn.disabled = true;
+    chapterEditSaveBtn.innerHTML =
+      '<div class="md-spinner" style="width:12px;height:12px;border-width:2px;"></div> Saving…';
+
+    try {
+      const res = await fetch(`/api/chapters/${chapterEditChapterId}/metadata`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchBody),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 409 && errData.locked_fields) {
+          throw new Error(`Locked fields: ${errData.locked_fields.join(', ')}`);
+        }
+        throw new Error(errData.error || `Save failed (HTTP ${res.status})`);
+      }
+
+      const data = await res.json();
+      toast.success('Chapter metadata saved');
+
+      chapterMetadataCache[chapterEditChapterId] = data.metadata;
+      rerenderChapters();
+
+      if (typeof updateChapterDrawer === 'function') {
+        updateChapterDrawer(chapterEditChapterId);
+      }
+
+      closeChapterEditModal();
+    } catch (err) {
+      toast.error(err.message);
+      chapterEditSaveBtn.disabled = false;
+      chapterEditSaveBtn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save';
+    }
+  };
+
+  const openChapterEditModal = async chapterId => {
+    chapterEditChapterId = chapterId;
+    chapterEditOriginalMeta = null;
+    chapterEditSaveBtn.disabled = false;
+    chapterEditSaveBtn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save';
+
+    chapterEditModal.style.display = 'flex';
+    chapterEditBody.innerHTML =
+      '<div class="md-search-loading" style="display:flex"><div class="md-spinner"></div><span>Loading…</span></div>';
+
+    try {
+      const res = await fetch(`/api/chapters/${chapterId}/metadata`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const meta = data.metadata;
+
+      chapterEditOriginalMeta = meta;
+      chapterEditBody.innerHTML = buildChapterEditFormHtml(meta, meta.locks || {});
+      attachChapterEditListeners(chapterId);
+    } catch (err) {
+      chapterEditBody.innerHTML = `<p style="color:var(--danger-color)">Failed to load metadata: ${escapeHtml(err.message)}</p>`;
+    }
+  };
+
+  const closeChapterEditModal = () => {
+    chapterEditModal.style.display = 'none';
+    chapterEditChapterId = null;
+    chapterEditOriginalMeta = null;
+  };
+
+  window.openChapterEditModal = openChapterEditModal;
+
+  const fetchChapterMetadata = async chapterId => {
+    if (chapterMetadataCache[chapterId]) return chapterMetadataCache[chapterId];
+    try {
+      const res = await fetch(`/api/chapters/${chapterId}/metadata`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const meta = data.metadata || null;
+      chapterMetadataCache[chapterId] = meta;
+      return meta;
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchAllChapterMetadata = async chapters => {
+    const promises = chapters.map(ch => fetchChapterMetadata(ch.id));
+    await Promise.all(promises);
+  };
+
+  const chapterDrawerLockIcon = (locked, lockField) => {
+    if (locked) {
+      return ` <i class="ph-bold ph-lock md-lock" data-lock-field="${lockField}" title="Locked"></i>`;
+    }
+    return ` <i class="ph-bold ph-lock-open md-lock md-lock-unlocked" data-lock-field="${lockField}" title="Unlocked"></i>`;
+  };
+
+  const buildChapterDrawerHtml = (meta, chapter) => {
+    const locks = meta.locks || {};
+    let html = '';
+
+    if (meta.title) {
+      html += `<p class="chapter-drawer-subtitle">${escapeHtml(meta.title)}</p>`;
+    }
+
+    const chapterType = meta.chapter_type || '';
+    if (chapterType && chapterType !== 'Regular') {
+      html += `<span class="chapter-drawer-type-badge">${escapeHtml(chapterType)}</span>`;
+    }
+
+    html += `<a class="chapter-drawer-read-btn" href="/reader/series/${chapter.folder_id}/chapters/${chapter.id}">`;
+    html += '<i class="ph-bold ph-book-open"></i> Read';
+    html += '</a>';
+
+    html += `<button class="chapter-drawer-edit-btn" data-chapter-id="${chapter.id}">`;
+    html += '<i class="ph-bold ph-pencil-simple"></i> Edit Metadata';
+    html += '</button>';
+
+    const metaItems = [];
+
+    if (meta.release_date) {
+      const formatted = formatChapterReleaseDate(meta.release_date);
+      if (formatted) {
+        metaItems.push({
+          label: 'Release Date',
+          value:
+            escapeHtml(formatted) + chapterDrawerLockIcon(locks.release_date, 'release_date_lock'),
+        });
+      }
+    }
+
+    if (meta.scanlation_group) {
+      metaItems.push({
+        label: 'Scanlation Group',
+        value:
+          escapeHtml(meta.scanlation_group) +
+          chapterDrawerLockIcon(locks.scanlation_group, 'scanlation_group_lock'),
+      });
+    }
+
+    if (meta.language) {
+      const langName = LANGUAGE_NAMES[meta.language] || meta.language;
+      metaItems.push({
+        label: 'Language',
+        value: escapeHtml(langName) + chapterDrawerLockIcon(locks.language, 'language_lock'),
+      });
+    }
+
+    if (meta.age_rating) {
+      metaItems.push({
+        label: 'Age Rating',
+        value:
+          escapeHtml(meta.age_rating) +
+          '+' +
+          chapterDrawerLockIcon(locks.age_rating, 'age_rating_lock'),
+      });
+    }
+
+    if (meta.volume) {
+      metaItems.push({
+        label: 'Volume',
+        value: escapeHtml(meta.volume) + chapterDrawerLockIcon(locks.volume, 'volume_lock'),
+      });
+    }
+
+    if (meta.story_arc) {
+      let arcVal = escapeHtml(meta.story_arc);
+      if (meta.story_arc_number) arcVal += ` #${escapeHtml(meta.story_arc_number)}`;
+      metaItems.push({
+        label: 'Story Arc',
+        value: arcVal + chapterDrawerLockIcon(locks.story_arc, 'story_arc_lock'),
+      });
+    }
+
+    if (meta.web) {
+      metaItems.push({
+        label: 'Web',
+        value:
+          `<a href="${escapeHtml(meta.web)}" target="_blank" rel="noopener noreferrer">${escapeHtml(meta.web)}</a>` +
+          chapterDrawerLockIcon(locks.web, 'web_lock'),
+        fullWidth: true,
+      });
+    }
+
+    if (metaItems.length > 0) {
+      html += '<div class="chapter-drawer-section-label">Details</div>';
+      html += '<div class="chapter-drawer-meta-grid">';
+      metaItems.forEach(item => {
+        const cls = item.fullWidth
+          ? 'chapter-drawer-meta-item full-width'
+          : 'chapter-drawer-meta-item';
+        html += `<div class="${cls}">`;
+        html += `<span class="chapter-drawer-meta-label">${item.label}</span>`;
+        html += `<span class="chapter-drawer-meta-value">${item.value}</span>`;
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    if (meta.authors && meta.authors.length > 0) {
+      html += '<div class="chapter-drawer-section-label">Authors</div>';
+      html += '<div class="chapter-drawer-authors">';
+      const groups = {};
+      meta.authors.forEach(a => {
+        const role = a.role || 'Other';
+        if (!groups[role]) groups[role] = [];
+        groups[role].push(a.name);
+      });
+      Object.entries(groups).forEach(([role, names]) => {
+        html += '<div class="chapter-drawer-author-group">';
+        html += `<div class="chapter-drawer-author-role">${escapeHtml(formatAuthorRole(role))}</div>`;
+        names.forEach(name => {
+          html += `<div class="chapter-drawer-author-name">${escapeHtml(name)}</div>`;
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    if (meta.summary && meta.summary.trim()) {
+      const summaryText = escapeHtml(meta.summary);
+      const isLong = meta.summary.length > 200;
+      html += '<div class="chapter-drawer-section-label">Summary</div>';
+      html += `<p class="chapter-drawer-summary-text${isLong ? ' collapsed' : ''}">${summaryText}</p>`;
+      if (isLong) {
+        html +=
+          '<button class="chapter-drawer-summary-toggle" data-expanded="false">Show more</button>';
+      }
+    }
+
+    if (meta.genres && meta.genres.length > 0) {
+      html += '<div class="chapter-drawer-section-label">Genres</div>';
+      html += '<div class="chapter-drawer-tags">';
+      meta.genres.forEach(g => {
+        html += `<span class="chapter-drawer-tag">${escapeHtml(g)}</span>`;
+      });
+      html += '</div>';
+    }
+
+    if (meta.tags && meta.tags.length > 0) {
+      html += '<div class="chapter-drawer-section-label">Tags</div>';
+      html += '<div class="chapter-drawer-tags">';
+      meta.tags.forEach(t => {
+        html += `<span class="chapter-drawer-tag">${escapeHtml(t)}</span>`;
+      });
+      html += '</div>';
+    }
+
+    if (meta.notes && meta.notes.trim()) {
+      html += '<div class="chapter-drawer-section-label">Notes</div>';
+      html += `<p class="chapter-drawer-summary-text">${escapeHtml(meta.notes)}</p>`;
+    }
+
+    return html;
+  };
+
+  const openChapterDrawer = async (chapterId, chapter) => {
+    const displayTitle = formatChapterTitle(chapterMetadataCache[chapterId] || {}, chapter);
+    chapterDrawerTitle.textContent = displayTitle;
+    chapterDrawerBody.innerHTML =
+      '<div class="chapter-drawer-loading"><div class="md-spinner"></div> Loading…</div>';
+    chapterDrawerBackdrop.classList.add('open');
+    chapterDrawer.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    const meta = await fetchChapterMetadata(chapterId);
+    if (!meta) {
+      chapterDrawerBody.innerHTML =
+        '<div class="chapter-drawer-loading">No metadata available for this chapter.</div>';
+      return;
+    }
+
+    chapterDrawerTitle.textContent = meta.number
+      ? `Chapter ${meta.number}`
+      : formatChapterTitle(meta, chapter);
+    chapterDrawerBody.innerHTML = buildChapterDrawerHtml(meta, chapter);
+
+    const summaryToggle = chapterDrawerBody.querySelector('.chapter-drawer-summary-toggle');
+    if (summaryToggle) {
+      const summaryText = chapterDrawerBody.querySelector('.chapter-drawer-summary-text');
+      summaryToggle.addEventListener('click', () => {
+        const expanded = summaryToggle.dataset.expanded === 'true';
+        summaryToggle.dataset.expanded = String(!expanded);
+        summaryText.classList.toggle('collapsed', expanded);
+        summaryToggle.textContent = expanded ? 'Show more' : 'Show less';
+      });
+    }
+
+    const editBtn = chapterDrawerBody.querySelector('.chapter-drawer-edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => {
+        openChapterEditModal(chapterId);
+      });
+    }
+
+    chapterDrawer.dataset.chapterId = chapterId;
+    chapterDrawer.dataset.folderId = chapter.folder_id;
+  };
+
+  const updateChapterDrawer = async chapterId => {
+    if (
+      !chapterDrawer.classList.contains('open') ||
+      chapterDrawer.dataset.chapterId !== String(chapterId)
+    ) {
+      return;
+    }
+    delete chapterMetadataCache[chapterId];
+    const chapter = currentChapters.find(c => c.id === chapterId);
+    if (chapter) {
+      const meta = await fetchChapterMetadata(chapterId);
+      if (meta) {
+        chapterDrawerTitle.textContent = meta.number
+          ? `Chapter ${meta.number}`
+          : formatChapterTitle(meta, chapter);
+        chapterDrawerBody.innerHTML = buildChapterDrawerHtml(meta, chapter);
+
+        const summaryToggle = chapterDrawerBody.querySelector('.chapter-drawer-summary-toggle');
+        if (summaryToggle) {
+          const summaryText = chapterDrawerBody.querySelector('.chapter-drawer-summary-text');
+          summaryToggle.addEventListener('click', () => {
+            const expanded = summaryToggle.dataset.expanded === 'true';
+            summaryToggle.dataset.expanded = String(!expanded);
+            summaryText.classList.toggle('collapsed', expanded);
+            summaryToggle.textContent = expanded ? 'Show more' : 'Show less';
+          });
+        }
+
+        const editBtn = chapterDrawerBody.querySelector('.chapter-drawer-edit-btn');
+        if (editBtn) {
+          editBtn.addEventListener('click', () => {
+            openChapterEditModal(chapterId);
+          });
+        }
+      }
+    }
+  };
+
+  const closeChapterDrawer = () => {
+    chapterDrawerBackdrop.classList.remove('open');
+    chapterDrawer.classList.remove('open');
+    document.body.style.overflow = '';
+  };
+
+  const updateBulkActionBar = () => {
+    const count = selectedChapterIds.size;
+    const filtered = getFilteredAndSortedChapters(currentChapters);
+    const total = filtered.length;
+    if (count > 0) {
+      bulkActionBar.style.display = 'flex';
+      bulkActionCount.textContent = `${count} of ${total} selected`;
+    } else {
+      bulkActionBar.style.display = 'none';
+    }
+  };
+
+  const enterSelectionMode = () => {
+    selectionMode = true;
+    selectedChapterIds.clear();
+    document.body.classList.add('selection-mode');
+    selectChaptersBtn.style.display = 'none';
+    rerenderChapters();
+    updateBulkActionBar();
+  };
+
+  const exitSelectionMode = () => {
+    selectionMode = false;
+    selectedChapterIds.clear();
+    document.body.classList.remove('selection-mode');
+    bulkActionBar.style.display = 'none';
+    const selControls = document.getElementById('selection-controls');
+    if (selControls) selControls.remove();
+    if (currentChapters.length > 0) {
+      selectChaptersBtn.style.display = '';
+    }
+    rerenderChapters();
+  };
+
+  const toggleChapterSelection = (chapterId, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (selectedChapterIds.has(chapterId)) {
+      selectedChapterIds.delete(chapterId);
+    } else {
+      if (selectedChapterIds.size >= 500) {
+        toast.warning('Cannot select more than 500 chapters');
+        return;
+      }
+      selectedChapterIds.add(chapterId);
+    }
+    const row = cardsGrid.querySelector(`[data-chapter-id="${chapterId}"]`);
+    if (row) {
+      row.classList.toggle('selected', selectedChapterIds.has(chapterId));
+      const cb = row.querySelector('.chapter-select-cb');
+      if (cb) cb.checked = selectedChapterIds.has(chapterId);
+    }
+    updateBulkActionBar();
+  };
+
+  const openBulkEditModal = () => {
+    if (selectedChapterIds.size === 0) return;
+    bulkEditModal.querySelectorAll('.bulk-field-check').forEach(cb => {
+      cb.checked = false;
+    });
+    bulkEditModal.querySelectorAll('.bulk-field-input').forEach(input => {
+      input.disabled = true;
+      input.value = '';
+    });
+    bulkEditModal.style.display = 'flex';
+  };
+
+  const closeBulkEditModal = () => {
+    bulkEditModal.style.display = 'none';
+  };
+
+  const handleBulkEditSave = async () => {
+    const fields = {};
+    bulkEditModal.querySelectorAll('.bulk-field-check').forEach(cb => {
+      if (!cb.checked) return;
+      const fieldName = cb.dataset.field;
+      const input = document.getElementById(`bulk-${fieldName}`);
+      if (!input) return;
+      const val = input.value.trim();
+      if (fieldName === 'tags' || fieldName === 'genres') {
+        fields[fieldName] = val
+          ? val
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+          : [];
+      } else {
+        fields[fieldName] = val;
+      }
+    });
+
+    if (Object.keys(fields).length === 0) {
+      toast.warning('No fields selected to update');
+      return;
+    }
+
+    bulkEditSaveBtn.disabled = true;
+    bulkEditSaveBtn.innerHTML =
+      '<div class="md-spinner" style="width:12px;height:12px;border-width:2px;"></div> Saving...';
+
+    try {
+      const res = await fetch(`/api/folders/${state.currentFolderId}/chapters/metadata/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chapter_ids: [...selectedChapterIds],
+          fields,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Bulk update failed (HTTP ${res.status})`);
+      }
+
+      const data = await res.json();
+      const updatedCount = data.updated ? data.updated.length : 0;
+      const skippedCount = data.skipped ? data.skipped.length : 0;
+
+      let msg = `Updated ${updatedCount} chapter${updatedCount !== 1 ? 's' : ''}`;
+      if (skippedCount > 0) {
+        msg += `, ${skippedCount} skipped (locked)`;
+      }
+      toast.success(msg);
+
+      closeBulkEditModal();
+
+      (data.updated || []).forEach(id => {
+        delete chapterMetadataCache[id];
+      });
+      await fetchAllChapterMetadata(
+        currentChapters.filter(ch => (data.updated || []).includes(ch.id))
+      );
+
+      exitSelectionMode();
+      rerenderChapters();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      bulkEditSaveBtn.disabled = false;
+      bulkEditSaveBtn.innerHTML = '<i class="ph-bold ph-floppy-disk"></i> Save Changes';
+    }
+  };
+
+  const getFilteredAndSortedChapters = chapters => {
+    let filtered = [...chapters];
+
+    if (state.chapterTypeFilterValue) {
+      filtered = filtered.filter(ch => {
+        const meta = chapterMetadataCache[ch.id];
+        const type = meta && meta.chapter_type ? meta.chapter_type : 'Regular';
+        return type === state.chapterTypeFilterValue;
+      });
+    }
+
+    if (state.chapterGroupFilterValue) {
+      filtered = filtered.filter(ch => {
+        const meta = chapterMetadataCache[ch.id];
+        return meta && meta.scanlation_group === state.chapterGroupFilterValue;
+      });
+    }
+
+    if (state.sortBy === 'release-date') {
+      const dir = state.sortDir === 'desc' ? -1 : 1;
+      filtered.sort((a, b) => {
+        const metaA = chapterMetadataCache[a.id];
+        const metaB = chapterMetadataCache[b.id];
+        const dateA = metaA && metaA.release_date ? metaA.release_date : null;
+        const dateB = metaB && metaB.release_date ? metaB.release_date : null;
+
+        if (dateA === dateB) {
+          return (parseFloat(a.number) || 0) - (parseFloat(b.number) || 0);
+        }
+        if (dateA === null) return 1;
+        if (dateB === null) return -1;
+        return dateA < dateB ? -1 * dir : dateA > dateB ? 1 * dir : 0;
+      });
+    }
+
+    return filtered;
+  };
+
+  const buildChapterFilterDropdowns = chapters => {
+    const types = new Set();
+    const groups = new Set();
+    chapters.forEach(ch => {
+      const meta = chapterMetadataCache[ch.id];
+      if (meta) {
+        if (meta.chapter_type) types.add(meta.chapter_type);
+        if (meta.scanlation_group) groups.add(meta.scanlation_group);
+      }
+    });
+
+    chapterTypeFilter.innerHTML = '<option value="">All Types</option>';
+    [...types].sort().forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      if (t === state.chapterTypeFilterValue) opt.selected = true;
+      chapterTypeFilter.appendChild(opt);
+    });
+    chapterTypeFilter.style.display = types.size > 0 ? '' : 'none';
+
+    chapterGroupFilter.innerHTML = '<option value="">All Groups</option>';
+    [...groups].sort().forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      if (g === state.chapterGroupFilterValue) opt.selected = true;
+      chapterGroupFilter.appendChild(opt);
+    });
+    chapterGroupFilter.style.display = groups.size > 0 ? '' : 'none';
+  };
+
+  const setChapterViewMode = mode => {
+    state.chapterViewMode = mode;
+    localStorage.setItem('chapterViewMode', mode);
+    viewListBtn.classList.toggle('active', mode === 'list');
+    viewGridBtn.classList.toggle('active', mode === 'grid');
+    rerenderChapters();
+  };
+
+  const rerenderChapters = () => {
+    const chapterHeader = cardsGrid.querySelector('.grid-section-header.chapter-section-header');
+    if (chapterHeader) {
+      let node = chapterHeader;
+      while (node) {
+        const next = node.nextSibling;
+        node.remove();
+        node = next;
+      }
+    }
+    const existingList = cardsGrid.querySelector('.chapter-list-container');
+    if (existingList) existingList.remove();
+    const existingGrid = cardsGrid.querySelector('.chapter-grid-container');
+    if (existingGrid) existingGrid.remove();
+    const existingSelControls = document.getElementById('selection-controls');
+    if (existingSelControls) existingSelControls.remove();
+
+    if (currentChapters.length === 0) return;
+
+    const filtered = getFilteredAndSortedChapters(currentChapters);
+
+    if (filtered.length === 0) {
+      cardsGrid.insertAdjacentHTML(
+        'beforeend',
+        '<h3 class="grid-section-header chapter-section-header">Chapters</h3><p>No chapters match the current filters.</p>'
+      );
+      return;
+    }
+
+    if (state.chapterViewMode === 'list') {
+      renderChapterList(filtered);
+    } else {
+      renderChapterGrid(filtered);
+    }
+
+    if (selectionMode) {
+      const selBar = document.createElement('div');
+      selBar.className = 'selection-controls';
+      selBar.id = 'selection-controls';
+
+      const selectAllBtn = document.createElement('button');
+      selectAllBtn.className = 'action-btn';
+      selectAllBtn.id = 'select-all-btn';
+      if (filtered.length > 500) {
+        selectAllBtn.disabled = true;
+        selectAllBtn.title = 'Cannot select all: more than 500 chapters';
+      }
+      selectAllBtn.innerHTML = '<i class="ph-bold ph-check-square"></i> Select All';
+      selectAllBtn.addEventListener('click', () => {
+        if (filtered.length > 500) return;
+        filtered.forEach(ch => selectedChapterIds.add(ch.id));
+        rerenderChapters();
+        updateBulkActionBar();
+      });
+
+      const deselectAllBtn = document.createElement('button');
+      deselectAllBtn.className = 'action-btn';
+      deselectAllBtn.innerHTML = '<i class="ph-bold ph-square"></i> Deselect All';
+      deselectAllBtn.addEventListener('click', () => {
+        selectedChapterIds.clear();
+        rerenderChapters();
+        updateBulkActionBar();
+      });
+
+      const exitBtn = document.createElement('button');
+      exitBtn.className = 'action-btn';
+      exitBtn.innerHTML = '<i class="ph-bold ph-x"></i> Exit Selection';
+      exitBtn.addEventListener('click', exitSelectionMode);
+
+      selBar.appendChild(selectAllBtn);
+      selBar.appendChild(deselectAllBtn);
+      selBar.appendChild(exitBtn);
+
+      const header = cardsGrid.querySelector('.grid-section-header.chapter-section-header');
+      if (header) {
+        header.after(selBar);
+      }
+    }
+  };
+
+  const renderChapterList = chapters => {
+    cardsGrid.insertAdjacentHTML(
+      'beforeend',
+      '<h3 class="grid-section-header chapter-section-header">Chapters</h3>'
+    );
+    const container = document.createElement('div');
+    container.className = 'chapter-list-container';
+
+    chapters.forEach(chapter => {
+      const meta = chapterMetadataCache[chapter.id] || {};
+      const row = document.createElement(selectionMode ? 'div' : 'a');
+      if (!selectionMode) {
+        row.href = `/reader/series/${chapter.folder_id}/chapters/${chapter.id}`;
+      }
+      row.className = 'chapter-list-row';
+      row.dataset.chapterId = chapter.id;
+      if (selectionMode && selectedChapterIds.has(chapter.id)) {
+        row.classList.add('selected');
+      }
+
+      const progressPercent = chapter.progress_percent || 0;
+      const isRead = progressPercent >= 100;
+
+      let html = '';
+
+      if (selectionMode) {
+        const checked = selectedChapterIds.has(chapter.id) ? ' checked' : '';
+        html += `<input type="checkbox" class="chapter-select-cb"${checked}>`;
+      }
+
+      html += `<img class="chapter-list-thumb" src="${chapter.thumbnail || '/static/images/logo.svg'}" loading="lazy" alt="" onerror="this.src='/static/images/logo.svg'">`;
+
+      const chapterNum = meta.number || '';
+      if (chapterNum) {
+        html += `<span class="chapter-list-number">${escapeHtml(chapterNum)}</span>`;
+      }
+
+      const displayTitle = formatChapterTitle(meta, chapter);
+      html += `<span class="chapter-list-title" title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</span>`;
+
+      const chapterType = meta.chapter_type || '';
+      if (chapterType && NON_REGULAR_TYPES.includes(chapterType)) {
+        html += `<span class="chapter-type-badge">${escapeHtml(chapterType)}</span>`;
+      }
+
+      if (meta.scanlation_group) {
+        html += `<span class="chapter-list-group">${escapeHtml(meta.scanlation_group)}</span>`;
+      }
+
+      if (progressPercent > 0) {
+        html += `<div class="chapter-list-progress"><div class="progress-bar" style="width: ${progressPercent}%;"></div></div>`;
+      }
+
+      const releaseDate = formatChapterReleaseDate(meta.release_date);
+      if (releaseDate) {
+        html += `<span class="chapter-list-date">${escapeHtml(releaseDate)}</span>`;
+      }
+
+      if (isRead) {
+        html +=
+          '<span class="chapter-read-indicator" title="Read"><i class="ph-bold ph-check-circle"></i></span>';
+      }
+
+      if (!selectionMode) {
+        html +=
+          '<button class="chapter-drawer-info-btn" data-chapter-id="' +
+          chapter.id +
+          '" title="Chapter info"><i class="ph-bold ph-info"></i></button>';
+      }
+
+      row.innerHTML = html;
+
+      if (selectionMode) {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', e => toggleChapterSelection(chapter.id, e));
+      } else {
+        row.querySelector('.chapter-drawer-info-btn').addEventListener('click', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          openChapterDrawer(chapter.id, chapter);
+        });
+      }
+      container.appendChild(row);
+    });
+
+    cardsGrid.appendChild(container);
+  };
+
+  const renderChapterGrid = chapters => {
+    cardsGrid.insertAdjacentHTML(
+      'beforeend',
+      '<h3 class="grid-section-header chapter-section-header">Chapters</h3>'
+    );
+    const container = document.createElement('div');
+    container.className = 'chapter-grid-container';
+
+    chapters.forEach(chapter => {
+      const meta = chapterMetadataCache[chapter.id] || {};
+      const card = document.createElement(selectionMode ? 'div' : 'a');
+      if (!selectionMode) {
+        card.href = `/reader/series/${chapter.folder_id}/chapters/${chapter.id}`;
+      }
+      card.className = 'chapter-grid-card';
+      card.dataset.chapterId = chapter.id;
+      if (selectionMode && selectedChapterIds.has(chapter.id)) {
+        card.classList.add('selected');
+      }
+
+      const progressPercent = chapter.progress_percent || 0;
+      const isRead = progressPercent >= 100;
+      const displayTitle = formatChapterTitle(meta, chapter);
+      const chapterNum = meta.number || '';
+
+      let html = '<div class="chapter-grid-thumb-wrap">';
+
+      if (selectionMode) {
+        const checked = selectedChapterIds.has(chapter.id) ? ' checked' : '';
+        html += `<input type="checkbox" class="chapter-select-cb chapter-grid-cb"${checked}>`;
+      }
+
+      html += `<img class="chapter-grid-thumb" src="${chapter.thumbnail || '/static/images/logo.svg'}" loading="lazy" alt="" onerror="this.src='/static/images/logo.svg'">`;
+      if (chapterNum) {
+        html += `<span class="chapter-grid-number">Ch. ${escapeHtml(chapterNum)}</span>`;
+      }
+      if (isRead) {
+        html += '<span class="chapter-grid-read"><i class="ph-bold ph-check-circle"></i></span>';
+      }
+      if (!selectionMode) {
+        html +=
+          '<button class="chapter-grid-info-btn" data-chapter-id="' +
+          chapter.id +
+          '" title="Chapter info"><i class="ph-bold ph-info"></i></button>';
+      }
+      html += '</div>';
+
+      if (progressPercent > 0) {
+        html += `<div class="chapter-grid-progress"><div class="progress-bar" style="width: ${progressPercent}%;"></div></div>`;
+      }
+
+      card.title = displayTitle;
+      card.innerHTML = html;
+
+      if (selectionMode) {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', e => toggleChapterSelection(chapter.id, e));
+      } else {
+        card.querySelector('.chapter-grid-info-btn').addEventListener('click', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          openChapterDrawer(chapter.id, chapter);
+        });
+      }
+      container.appendChild(card);
+    });
+
+    cardsGrid.appendChild(container);
+  };
+
   const renderGrid = data => {
     cardsGrid.innerHTML = '';
-    if (
-      (!data.subfolders || data.subfolders.length === 0) &&
-      (!data.chapters || data.chapters.length === 0)
-    ) {
+    const hasChapters = data.chapters && data.chapters.length > 0;
+    const hasSubfolders = data.subfolders && data.subfolders.length > 0;
+
+    viewToggle.style.display = hasChapters ? '' : 'none';
+    viewListBtn.classList.toggle('active', state.chapterViewMode === 'list');
+    viewGridBtn.classList.toggle('active', state.chapterViewMode === 'grid');
+
+    if (!hasSubfolders && !hasChapters) {
       const hasActiveFilter =
-        state.search || state.unreadOnly || state.filterTagId || state.currentTagId;
+        state.search ||
+        state.unreadOnly ||
+        state.filterTagId ||
+        state.currentTagId ||
+        state.chapterTypeFilterValue ||
+        state.chapterGroupFilterValue;
       if (hasActiveFilter) {
         cardsGrid.innerHTML = '<p>No results found.</p>';
       } else {
@@ -1282,19 +2489,30 @@ document.addEventListener('DOMContentLoaded', async () => {
           '<p class="empty-state-subtitle">Add manga files to this folder and scan your library to see chapters here.</p>' +
           '</div>';
       }
+      chapterTypeFilter.style.display = 'none';
+      chapterGroupFilter.style.display = 'none';
       return;
     }
 
-    if (data.subfolders && data.subfolders.length > 0) {
+    if (hasSubfolders) {
       cardsGrid.insertAdjacentHTML('beforeend', '<h3 class="grid-section-header">Folders</h3>');
       data.subfolders.forEach(folder => cardsGrid.appendChild(createFolderCard(folder)));
     }
-    if (data.chapters && data.chapters.length > 0) {
-      cardsGrid.insertAdjacentHTML('beforeend', '<h3 class="grid-section-header">Chapters</h3>');
-      data.chapters.forEach(chapter => cardsGrid.appendChild(createChapterCard(chapter)));
+
+    if (hasChapters) {
+      currentChapters = data.chapters;
+      selectChaptersBtn.style.display = selectionMode ? 'none' : '';
+      fetchAllChapterMetadata(data.chapters).then(() => {
+        buildChapterFilterDropdowns(data.chapters);
+        rerenderChapters();
+      });
+    } else {
+      currentChapters = [];
+      selectChaptersBtn.style.display = 'none';
+      chapterTypeFilter.style.display = 'none';
+      chapterGroupFilter.style.display = 'none';
     }
 
-    // Load AniList buttons asynchronously after rendering
     loadAniListButtonsAsync();
   };
 
@@ -1738,15 +2956,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Close modal when pressing ESC key
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && editFolderModal.style.display === 'flex') {
-      editFolderModal.style.display = 'none';
-    }
-    if (e.key === 'Escape' && metadataSearchModal.style.display === 'flex') {
-      closeMetadataSearchModal();
+    if (e.key === 'Escape') {
+      if (chapterEditModal.style.display === 'flex') {
+        closeChapterEditModal();
+      } else if (bulkEditModal.style.display === 'flex') {
+        closeBulkEditModal();
+      } else if (selectionMode) {
+        exitSelectionMode();
+      } else if (editFolderModal.style.display === 'flex') {
+        editFolderModal.style.display = 'none';
+      } else if (metadataSearchModal.style.display === 'flex') {
+        closeMetadataSearchModal();
+      } else if (chapterDrawer.classList.contains('open')) {
+        closeChapterDrawer();
+      }
     }
   });
+
+  chapterEditCloseBtn.addEventListener('click', closeChapterEditModal);
+  chapterEditCancelBtn.addEventListener('click', closeChapterEditModal);
+  chapterEditSaveBtn.addEventListener('click', handleChapterEditSave);
+  chapterEditModal.addEventListener('click', e => {
+    if (e.target === chapterEditModal) closeChapterEditModal();
+  });
+
+  chapterDrawerBackdrop.addEventListener('click', closeChapterDrawer);
+  chapterDrawerClose.addEventListener('click', closeChapterDrawer);
 
   linkMetadataBtn.addEventListener('click', openMetadataSearchModal);
 
@@ -1848,7 +3084,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadFolderContents();
   });
 
+  viewListBtn.addEventListener('click', () => setChapterViewMode('list'));
+  viewGridBtn.addEventListener('click', () => setChapterViewMode('grid'));
+
+  chapterTypeFilter.addEventListener('change', () => {
+    state.chapterTypeFilterValue = chapterTypeFilter.value;
+    rerenderChapters();
+  });
+
+  chapterGroupFilter.addEventListener('change', () => {
+    state.chapterGroupFilterValue = chapterGroupFilter.value;
+    rerenderChapters();
+  });
+
   ratingClearBtn.addEventListener('click', () => setRating(0));
+
+  selectChaptersBtn.addEventListener('click', enterSelectionMode);
+  bulkEditBtn.addEventListener('click', openBulkEditModal);
+  bulkCancelBtn.addEventListener('click', exitSelectionMode);
+  bulkEditCloseBtn.addEventListener('click', closeBulkEditModal);
+  bulkEditCancelBtn.addEventListener('click', closeBulkEditModal);
+  bulkEditSaveBtn.addEventListener('click', handleBulkEditSave);
+  bulkEditModal.addEventListener('click', e => {
+    if (e.target === bulkEditModal) closeBulkEditModal();
+  });
+
+  bulkEditModal.querySelectorAll('.bulk-field-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const fieldName = cb.dataset.field;
+      const input = document.getElementById(`bulk-${fieldName}`);
+      if (input) input.disabled = !cb.checked;
+    });
+  });
 
   const init = async () => {
     state.currentFolderId = getFolderIdFromUrl();

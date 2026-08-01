@@ -111,9 +111,23 @@
                     <option value="created_at">Date Added</option>
                     <option value="updated_at">Date Modified</option>
                     <option value="progress">Progress</option>
+                    <option value="release-date">Release Date</option>
                 </select>
                 <button id="sort-dir-btn">▲</button>
                 <button id="unread-filter-btn" class="filter-btn" title="Show only unread">Unread</button>
+                <select id="chapter-type-filter" class="chapter-filter-select" style="display: none;">
+                    <option value="">All Types</option>
+                </select>
+                <select id="chapter-group-filter" class="chapter-filter-select" style="display: none;">
+                    <option value="">All Groups</option>
+                </select>
+                <button id="select-chapters-btn" class="action-btn" style="display: none;" title="Select chapters for bulk editing">
+                    <i class="ph-bold ph-selection-all"></i> Select
+                </button>
+                <div class="view-toggle" id="view-toggle" style="display: none;">
+                    <button class="view-toggle-btn active" id="view-list-btn" title="List view"><i class="ph-bold ph-list"></i></button>
+                    <button class="view-toggle-btn" id="view-grid-btn" title="Grid view"><i class="ph-bold ph-grid-four"></i></button>
+                </div>
             </div>
         </div>
         <div class="tag-filter-bar" id="tag-filter-bar" style="display: none;">
@@ -182,6 +196,117 @@
                 <button id="md-search-cancel-btn" class="cancel-btn">Cancel</button>
                 <button id="md-link-btn" class="md-link-btn" disabled>
                     <i class="ph-bold ph-link"></i> Link
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter Detail Drawer -->
+    <div class="chapter-drawer-backdrop" id="chapter-drawer-backdrop"></div>
+    <div class="chapter-drawer" id="chapter-drawer">
+        <div class="chapter-drawer-header">
+            <h2 class="chapter-drawer-title" id="chapter-drawer-title"></h2>
+            <button class="chapter-drawer-close" id="chapter-drawer-close" title="Close"><i class="ph-bold ph-x"></i></button>
+        </div>
+        <div class="chapter-drawer-body" id="chapter-drawer-body"></div>
+    </div>
+
+    <!-- Bulk Selection Floating Action Bar -->
+    <div class="bulk-action-bar" id="bulk-action-bar" style="display: none;">
+        <span class="bulk-action-count" id="bulk-action-count">0 selected</span>
+        <div class="bulk-action-buttons">
+            <button class="bulk-action-btn bulk-action-edit" id="bulk-edit-btn">
+                <i class="ph-bold ph-pencil-simple"></i> Edit Selected
+            </button>
+            <button class="bulk-action-btn bulk-action-cancel" id="bulk-cancel-btn">
+                <i class="ph-bold ph-x"></i> Cancel
+            </button>
+        </div>
+    </div>
+
+    <!-- Bulk Edit Modal -->
+    <div class="modal-overlay" id="bulk-edit-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Bulk Edit Chapters</h2>
+                <button class="modal-close-btn" id="bulk-edit-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="bulk-edit-hint">Check the fields you want to update. Unchecked fields will not be changed.</p>
+                <div class="bulk-edit-fields" id="bulk-edit-fields">
+                    <div class="bulk-edit-field-row">
+                        <label class="bulk-edit-field-toggle">
+                            <input type="checkbox" class="bulk-field-check" data-field="scanlation_group">
+                            <span>Scanlation Group</span>
+                        </label>
+                        <input type="text" class="bulk-field-input" id="bulk-scanlation_group" placeholder="Group name" disabled>
+                    </div>
+                    <div class="bulk-edit-field-row">
+                        <label class="bulk-edit-field-toggle">
+                            <input type="checkbox" class="bulk-field-check" data-field="chapter_type">
+                            <span>Chapter Type</span>
+                        </label>
+                        <select class="bulk-field-input" id="bulk-chapter_type" disabled>
+                            <option value="Regular">Regular</option>
+                            <option value="Special">Special</option>
+                            <option value="Bonus">Bonus</option>
+                            <option value="Omake">Omake</option>
+                            <option value="One-Shot">One-Shot</option>
+                            <option value="Annual">Annual</option>
+                            <option value="Omnibus">Omnibus</option>
+                        </select>
+                    </div>
+                    <div class="bulk-edit-field-row">
+                        <label class="bulk-edit-field-toggle">
+                            <input type="checkbox" class="bulk-field-check" data-field="language">
+                            <span>Language</span>
+                        </label>
+                        <input type="text" class="bulk-field-input" id="bulk-language" placeholder="e.g. en, ja" disabled>
+                    </div>
+                    <div class="bulk-edit-field-row">
+                        <label class="bulk-edit-field-toggle">
+                            <input type="checkbox" class="bulk-field-check" data-field="age_rating">
+                            <span>Age Rating</span>
+                        </label>
+                        <input type="text" class="bulk-field-input" id="bulk-age_rating" placeholder="e.g. 13+" disabled>
+                    </div>
+                    <div class="bulk-edit-field-row">
+                        <label class="bulk-edit-field-toggle">
+                            <input type="checkbox" class="bulk-field-check" data-field="tags">
+                            <span>Tags</span>
+                        </label>
+                        <input type="text" class="bulk-field-input" id="bulk-tags" placeholder="Comma-separated tags" disabled>
+                    </div>
+                    <div class="bulk-edit-field-row">
+                        <label class="bulk-edit-field-toggle">
+                            <input type="checkbox" class="bulk-field-check" data-field="genres">
+                            <span>Genres</span>
+                        </label>
+                        <input type="text" class="bulk-field-input" id="bulk-genres" placeholder="Comma-separated genres" disabled>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="bulk-edit-cancel-btn" class="cancel-btn">Cancel</button>
+                <button id="bulk-edit-save-btn" class="upload-btn">
+                    <i class="ph-bold ph-floppy-disk"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chapter Metadata Edit Modal -->
+    <div class="modal-overlay" id="chapter-edit-modal">
+        <div class="modal-content chapter-edit-modal-content">
+            <div class="modal-header">
+                <h2>Edit Chapter Metadata</h2>
+                <button class="modal-close-btn" id="chapter-edit-close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="chapter-edit-body"></div>
+            <div class="modal-footer">
+                <button class="cancel-btn" id="chapter-edit-cancel-btn">Cancel</button>
+                <button class="ce-save-btn" id="chapter-edit-save-btn">
+                    <i class="ph-bold ph-floppy-disk"></i> Save
                 </button>
             </div>
         </div>
