@@ -116,7 +116,7 @@ func TestPluginRepositoryHandlers(t *testing.T) {
 		mockManager.ExpectedCalls = nil
 
 		reqBody := map[string]string{
-			"url":  "http://invalid-url-that-does-not-exist.local",
+			"url":  "http://127.0.0.1:1/repo.json",
 			"name": "Invalid Repo",
 		}
 		body, _ := json.Marshal(reqBody)

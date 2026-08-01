@@ -43,46 +43,62 @@
     <main class="container">
         <nav class="breadcrumb" id="breadcrumb-container"></nav>
         <div class="page-header">
-            <img id="folder-thumb" class="header-thumb" style="display: none;">
-            <h1 id="page-title">Library</h1>
+            <div class="cover-container" id="cover-container" style="display: none;">
+                <img id="folder-thumb" class="header-thumb">
+                <button class="cover-overlay-btn cover-edit-btn" id="edit-folder-btn" style="display: none;" title="Edit Cover">
+                    <i class="ph-bold ph-image"></i>
+                </button>
+            </div>
+            <div class="page-header-left">
+                <div class="page-header-hero">
+                    <h1 id="page-title">Library</h1>
+                    <span class="md-status-badge" id="md-status-badge" style="display: none;"></span>
+                </div>
+                <div id="md-alt-titles-header" style="display: none;"></div>
+                <div class="folder-tags-section" id="folder-tags-section" style="display: none;">
+                    <div class="inline-tags" id="tags-container"></div>
+                    <div class="inline-tag-input-wrap" id="inline-tag-input-wrap">
+                        <input type="text" id="tag-input" class="inline-tag-input" placeholder="+ Add tag…" autocomplete="off" title="Type a tag name and press Enter to save">
+                        <div class="autocomplete-suggestions" id="autocomplete-suggestions"></div>
+                    </div>
+                </div>
+            </div>
             <div class="header-actions">
                 <div class="rating-widget" id="rating-widget" style="display: none;" title="Rate this series">
                     <span class="rating-label">Rating:</span>
                     <div class="rating-stars" id="rating-stars"></div>
-                    <button class="rating-clear-btn" id="rating-clear-btn" title="Clear rating">×</button>
+                    <button class="rating-clear-btn" id="rating-clear-btn" title="Clear rating" aria-label="Clear rating">×</button>
                 </div>
-                <div class="progress-actions" id="progress-actions" style="display: none;">
-                    <button id="mark-all-read-btn" class="action-btn" title="Mark all chapters as read">
-                        <i class="ph-bold ph-check-circle"></i> All Read
-                    </button>
-                    <button id="mark-all-unread-btn" class="action-btn" title="Mark all chapters as unread">
-                        <i class="ph-bold ph-circle"></i> All Unread
-                    </button>
+                <div class="community-score-widget" id="community-score-widget" style="display: none;">
+                    <span class="cs-label">Community:</span>
+                    <span class="cs-value" id="cs-value"></span>
                 </div>
-                <button class="edit-btn" id="edit-folder-btn" style="display: none;" title="Edit Cover">
-                    <i class="ph-bold ph-image"></i>
-                </button>
+                <div class="md-header-actions" id="md-header-actions" style="display: none;">
+                    <button class="md-icon-btn" id="md-edit-btn" title="Edit metadata"><i class="ph-bold ph-pencil-simple"></i></button>
+                    <button class="md-icon-btn" id="md-refresh-btn" title="Refresh metadata from provider"><i class="ph-bold ph-arrows-clockwise"></i></button>
+                    <button class="md-icon-btn" id="md-relink-btn" title="Search and link different metadata"><i class="ph-bold ph-magnifying-glass"></i></button>
+                    <button class="md-icon-btn md-icon-danger" id="md-reset-btn" title="Clear metadata but keep provider link"><i class="ph-bold ph-eraser"></i></button>
+                    <button class="md-icon-btn md-icon-danger" id="md-unlink-btn" title="Remove metadata and provider link"><i class="ph-bold ph-link-break"></i></button>
+                </div>
             </div>
         </div>
 
-        <!-- Inline tags — shown only when viewing a specific folder -->
-        <div class="folder-tags-section" id="folder-tags-section" style="display: none;">
-            <div class="inline-tags" id="tags-container"></div>
-            <div class="inline-tag-input-wrap" id="inline-tag-input-wrap">
-                <input type="text" id="tag-input" class="inline-tag-input" placeholder="+ Add tag…" autocomplete="off" title="Type a tag name and press Enter to save">
-                <div class="autocomplete-suggestions" id="autocomplete-suggestions"></div>
-            </div>
-        </div>
-
-        <div class="metadata-panel" id="metadata-panel" style="display: none;"></div>
-        <div class="no-metadata-prompt" id="no-metadata-prompt" style="display: none;">
-            <p>No metadata linked. Search for metadata to get started.</p>
-            <button class="link-metadata-btn" id="link-metadata-btn">
-                <i class="ph-bold ph-magnifying-glass"></i> Search Metadata
+        <div id="metadata-panel" style="display: none;"></div>
+        <div id="no-metadata-prompt" style="display: none;">
+            <button class="link-anilist-btn" id="link-metadata-btn">
+                <i class="ph-bold ph-link"></i> Link to AniList
             </button>
         </div>
 
         <span id="total-count" class="total-count"></span>
+        <div class="progress-actions" id="progress-actions" style="display: none;">
+            <button id="mark-all-read-btn" class="action-btn" title="Mark all chapters as read">
+                <i class="ph-bold ph-check-circle"></i> All Read
+            </button>
+            <button id="mark-all-unread-btn" class="action-btn" title="Mark all chapters as unread">
+                <i class="ph-bold ph-circle"></i> All Unread
+            </button>
+        </div>
         <div class="library-controls">
             <div class="search-bar">
                 <input type="search" id="search-input" placeholder="Search this folder...">

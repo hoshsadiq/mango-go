@@ -19,7 +19,7 @@ func TestTagHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create folder: %v", err)
 	}
-	_, err = server.Store().AddTagToFolder(folderA.ID, "action")
+	_, err = server.Store().AddTagToFolder(folderA.ID, "action", "user")
 	if err != nil {
 		t.Fatalf("Failed to add tag to folder: %v", err)
 	}

@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"io"
 	"io/fs"
@@ -23,7 +24,7 @@ import (
 
 // AnilistSearcher is used to fetch manga metadata from AniList (injectable for tests).
 type AnilistSearcher interface {
-	SearchManga(title string) (*anilist.Media, error)
+	SearchManga(ctx context.Context, title string) (*anilist.Media, error)
 }
 
 // Server holds the dependencies for our API.
@@ -64,13 +65,14 @@ func NewServer(app *core.App) *Server {
 	provider := metadataanilist.NewAniListProvider(
 		anilistClient,
 		cfg.Metadata.AniList.ExcludeSpoilerTags,
-		cfg.Metadata.CoverFailureMode,
+		metadataanilist.CoverFailureMode(cfg.Metadata.CoverFailureMode),
 	)
 	return &Server{
 		app:              app,
 		db:               app.DB(),
 		store:            storeInstance,
 		homeStore:        storeInstance,
+		anilistSearcher:  anilistClient,
 		metadataProvider: provider,
 	}
 }

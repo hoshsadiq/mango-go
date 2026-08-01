@@ -77,54 +77,67 @@
   box-shadow: 0 4px 12px rgba(var(--accent-color-rgb), 0.3);
 }
 
-/* AniList Button */
-.anilist-button {
-  background-color: #2a2a2a;
-  border: 2px solid #444444;
-  padding: 0.5rem;
-  margin: 0;
-  border-radius: 8px;
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
+/* Cover container, wraps folder thumbnail for overlay positioning */
+.cover-container {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Shared overlay button style for cover overlays */
+.cover-overlay-btn {
+  position: absolute;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.9;
-  width: 40px;
-  height: 40px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+  transition:
+    opacity 0.2s ease,
+    background 0.2s ease;
+  z-index: 2;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 1;
 }
 
-.anilist-button:hover {
+.cover-overlay-btn:hover,
+.cover-overlay-btn:focus {
   opacity: 1;
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--accent-color-rgb), 0.3);
+  background: rgba(0, 0, 0, 0.8);
 }
 
-/* Light theme hover state for AniList button */
-body.light-theme .anilist-button:hover {
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
-  box-shadow: 0 4px 12px rgba(var(--accent-color-rgb), 0.4);
+/* Edit cover overlay, bottom-right of cover */
+.cover-edit-btn {
+  bottom: 6px;
+  right: 6px;
 }
 
-.anilist-button:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(var(--accent-color-rgb), 0.2);
+/* Lock overlay, top-right of cover */
+.cover-lock-btn {
+  top: 6px;
+  right: 6px;
+  font-size: 12px;
+}
+
+.cover-lock-btn.md-lock-unlocked {
+  opacity: 0.35;
+}
+
+.cover-lock-btn.md-lock-unlocked:hover,
+.cover-lock-btn.md-lock-unlocked:focus {
+  opacity: 0.9;
 }
 
 .anilist-icon {
-  width: 24px;
-  height: 24px;
-  filter: none;
-  transition: none;
-}
-
-.anilist-button:hover .anilist-icon {
-  filter: none;
+  width: 16px;
+  height: 16px;
 }
 
 .sort-controls span {
@@ -183,7 +196,7 @@ body.light-theme .anilist-button:hover {
 /* Page Header */
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 1rem;
   flex-wrap: wrap;
@@ -191,11 +204,27 @@ body.light-theme .anilist-button:hover {
   animation: fadeIn 0.3s ease;
 }
 
-#page-title {
+/* Left side of page header: two visual rows, hero (title+badge) then actions */
+.page-header-left {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.page-header-hero {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#page-title {
   min-width: 0;
   word-break: break-word;
   font-size: clamp(1.2rem, 2.5vw, 2rem);
+  margin: 0;
 }
 
 .breadcrumb {
@@ -346,7 +375,7 @@ body.light-theme .anilist-button:hover {
   overflow-y: auto;
   border: 2px solid var(--border-color);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  animation: slideIn 0.3s ease;
+  animation: modalSlideIn 0.3s ease;
   margin-top: 0;
   margin-bottom: 2rem;
 }
@@ -430,7 +459,7 @@ body.light-theme .anilist-button:hover {
   border-radius: 8px;
   background: rgba(var(--accent-color-rgb), 0.1);
   margin-top: 0.5rem;
-  animation: slideIn 0.3s ease;
+  animation: modalSlideIn 0.3s ease;
 }
 
 .selected-file-info i {
@@ -516,8 +545,9 @@ body.light-theme .anilist-button:hover {
 }
 
 .header-thumb {
-  width: 100px;
-  height: 140px;
+  width: 140px;
+  height: auto;
+  aspect-ratio: 5 / 7;
   object-fit: cover;
   border-radius: 8px;
   border: 2px solid var(--border-color);
@@ -535,7 +565,7 @@ body.light-theme .anilist-button:hover {
   }
 }
 
-@keyframes slideIn {
+@keyframes modalSlideIn {
   from {
     opacity: 0;
     transform: scale(0.9);
@@ -544,6 +574,52 @@ body.light-theme .anilist-button:hover {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* ─── Edit Mode Layout Overrides ─── */
+
+body.md-editing .header-actions {
+  display: none;
+}
+
+body.md-editing #folder-tags-section {
+  display: none !important;
+}
+
+body.md-editing .page-header {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+body.md-editing .page-header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+body.md-editing .page-header-hero {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+body.md-editing #page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+body.md-editing #page-title .md-edit-title {
+  flex: 1;
+  min-width: 0;
+}
+
+body.md-editing #metadata-panel {
+  margin-top: 0;
 }
 
 /* Responsive Design */
@@ -567,13 +643,40 @@ body.light-theme .anilist-button:hover {
     align-items: stretch;
   }
 
+  body.md-editing .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.md-editing .cover-container {
+    align-self: center;
+  }
+
   .breadcrumb {
     font-size: 0.9rem;
   }
 
   .header-thumb {
-    width: 80px;
-    height: 112px;
+    width: 100px;
+    height: auto;
+    aspect-ratio: 5 / 7;
+  }
+
+  .cover-overlay-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+
+  .cover-edit-btn {
+    bottom: 4px;
+    right: 4px;
+  }
+
+  .cover-lock-btn {
+    top: 4px;
+    right: 4px;
+    font-size: 10px;
   }
 
   /* Mobile modal positioning */
@@ -582,10 +685,8 @@ body.light-theme .anilist-button:hover {
     padding-top: 8rem;
   }
 
-  /* Header actions: wrap and align left on mobile */
   .header-actions {
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    align-items: flex-start;
     width: 100%;
   }
 
@@ -698,11 +799,12 @@ body.light-theme .anilist-button:hover {
   color: white;
 }
 
-/* Header actions wrapper (rating + edit button) */
+/* Header actions wrapper (ratings stacked + icon toolbar below) */
 .header-actions {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
 }
 
 /* Rating widget */
@@ -728,7 +830,7 @@ body.light-theme .anilist-button:hover {
   cursor: pointer;
   font-size: 1.1rem;
   color: var(--border-color);
-  padding: 0;
+  padding: 0.35rem;
   transition: color 0.1s;
 }
 
@@ -779,32 +881,8 @@ body.light-theme .anilist-button:hover {
 
 .inline-tags {
   display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  gap: 0.4rem;
-  padding-bottom: 4px; /* room for scrollbar */
-  min-width: 0; /* allow overflow-x to kick in inside flex parent */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) transparent;
-}
-
-.inline-tags::-webkit-scrollbar {
-  height: 4px;
-}
-
-.inline-tags::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.inline-tags::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 2px;
-}
-
-.inline-tags.expanded {
   flex-wrap: wrap;
-  overflow-x: visible;
-  padding-bottom: 0;
+  gap: 0.4rem;
 }
 
 /* Tags in the inline row: theme-aware colors, don't shrink */
@@ -952,6 +1030,37 @@ body.light-theme .anilist-button:hover {
 .action-btn:hover {
   border-color: var(--accent-color);
   color: var(--accent-color);
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 0.5rem;
+}
+
+.empty-state i {
+  font-size: 3rem;
+  opacity: 0.3;
+  color: var(--text-color);
+}
+
+.empty-state-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.empty-state-subtitle {
+  font-size: 0.9rem;
+  color: var(--subtle-text-color);
+  margin: 0;
+  text-align: center;
+  max-width: 360px;
 }
 
 /* Narrow modal for cover-only edit */

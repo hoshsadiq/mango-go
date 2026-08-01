@@ -104,6 +104,12 @@ a {
   outline: none;
   transform: translateY(-1px);
 }
+
+.nav-links a.nav-active {
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+  background-color: rgba(var(--accent-color-rgb), 0.08);
+}
 .header-right {
   display: flex;
   align-items: center;
@@ -615,14 +621,6 @@ a {
   border-top: 2px solid var(--accent-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-}
-/* Smooth transitions for interactive elements */
-* {
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease,
-    box-shadow 0.2s ease;
 }
 /* Focus states for accessibility */
 button:focus-visible,

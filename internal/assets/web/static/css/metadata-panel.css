@@ -1,84 +1,104 @@
-/* Metadata Panel — folder detail metadata display */
+/* Metadata, inline header metadata display + edit mode */
 
-/* Main panel container */
-.metadata-panel {
-  background: var(--card-bg);
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+/* Detail section (unboxed, flows naturally below header) */
+#metadata-panel {
+  margin-bottom: 1rem;
   animation: fadeIn 0.3s ease;
 }
 
-/* No metadata prompt */
-.no-metadata-prompt {
-  background: var(--card-bg);
-  border: 2px dashed var(--border-color);
-  border-radius: 12px;
-  padding: 2rem;
-  margin-bottom: 1.5rem;
-  text-align: center;
-  animation: fadeIn 0.3s ease;
-}
-
-.no-metadata-prompt p {
-  color: var(--subtle-text-color);
-  margin: 0 0 1rem 0;
-  font-size: 0.95rem;
-}
-
-.no-metadata-prompt .link-metadata-btn {
-  background: var(--accent-color);
-  color: white;
-  border: 2px solid var(--accent-color);
-  padding: 0.6rem 1.2rem;
+/* "Link to AniList" button (shown when unlinked) */
+.link-anilist-btn {
+  background: none;
+  border: 1.5px solid var(--border-color);
+  color: var(--text-color);
+  padding: 0.4rem 0.9rem;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-}
-
-.no-metadata-prompt .link-metadata-btn:hover {
-  background: var(--accent-color-dark);
-  border-color: var(--accent-color-dark);
-  box-shadow: 0 4px 12px rgba(var(--accent-color-rgb), 0.3);
-}
-
-/* Panel header (title + status) */
-.md-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
   margin-bottom: 1rem;
-  flex-wrap: wrap;
 }
 
-.md-title {
-  font-size: 1.3rem;
-  font-weight: 700;
+.link-anilist-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: rgba(var(--accent-color-rgb), 0.06);
+}
+
+/* Header icon buttons for metadata actions (edit/refresh/relink/unlink) */
+.md-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.md-icon-btn {
+  background: none;
+  border: 1.5px solid var(--border-color);
+  color: var(--subtle-text-color);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.md-icon-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: rgba(var(--accent-color-rgb), 0.06);
+}
+
+.md-icon-btn.md-icon-danger:hover {
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+/* Community score widget (in header-actions, next to rating) */
+.community-score-widget {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cs-label {
+  font-size: 0.8rem;
+  color: var(--subtle-text-color);
+}
+
+.cs-value {
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--text-color);
-  margin: 0;
-  line-height: 1.3;
-  flex: 1;
-  min-width: 0;
-  word-break: break-word;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
-/* Status badge */
+/* Status badge (in page-header-left, next to title) */
 .md-status-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.25rem 0.7rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .md-status-badge.ongoing {
@@ -105,22 +125,13 @@
   border: 1.5px solid var(--warning-color);
 }
 
-/* Provider link badge */
-.md-provider-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: var(--subtle-text-color);
-  text-decoration: none;
-  padding: 0.2rem 0.6rem;
-  border: 1.5px solid var(--border-color);
-  border-radius: 999px;
-}
-
-.md-provider-link:hover {
-  border-color: var(--accent-color);
-  color: var(--accent-color);
+/* Edit mode header (title + status + save/cancel inside panel) */
+.md-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 /* Alternative titles (collapsible) */
@@ -203,8 +214,9 @@
 
 /* Section labels */
 .md-section-label {
-  font-size: 0.78rem;
-  color: var(--subtle-text-color);
+  font-size: 0.85rem;
+  color: var(--text-color);
+  opacity: 0.75;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -252,7 +264,7 @@
   flex-shrink: 0;
 }
 
-/* Community score */
+/* Community score (edit mode, inside panel) */
 .md-score {
   display: flex;
   align-items: center;
@@ -281,37 +293,6 @@
   border-radius: 4px;
   background: var(--accent-color);
   transition: width 0.5s ease;
-}
-
-/* Pill containers (genres + tags) */
-.md-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
-}
-
-/* Filled genre pills */
-.md-genre-pill {
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  background: var(--accent-color);
-  color: white;
-  white-space: nowrap;
-}
-
-/* Outlined tag pills */
-.md-tag-pill {
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  background: transparent;
-  color: var(--text-color);
-  border: 1.5px solid var(--border-color);
-  white-space: nowrap;
 }
 
 /* Authors section */
@@ -369,28 +350,25 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-  .metadata-panel {
-    padding: 1rem;
-  }
-
   .md-info-grid {
     grid-template-columns: 1fr;
-  }
-
-  .md-title {
-    font-size: 1.1rem;
   }
 
   .md-header {
     flex-direction: column;
   }
+
+  .md-header-actions {
+    gap: 0.2rem;
+  }
+
+  .community-score-widget {
+    order: 10;
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
-  .metadata-panel {
-    padding: 0.75rem;
-  }
-
   .md-score-bar {
     max-width: 120px;
   }
@@ -576,15 +554,7 @@
   cursor: not-allowed;
 }
 
-/* Metadata panel action buttons */
-.md-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-}
-
+/* Metadata panel action buttons (edit mode save/cancel) */
 .md-action-btn {
   background: none;
   border: 1.5px solid var(--border-color);
@@ -876,6 +846,34 @@
 .md-add-row-btn:hover {
   border-color: var(--accent-color);
   color: var(--accent-color);
+}
+
+.md-edit-sticky-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--card-bg);
+  border-top: 1.5px solid var(--border-color);
+  padding: 0.6rem 0;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.md-edit-collection-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid var(--warning-color);
+  border-radius: 6px;
+  color: var(--warning-color);
+}
+
+.md-icon-btn.md-icon-danger {
+  color: var(--danger-color);
+  opacity: 0.7;
+}
+
+.md-icon-btn.md-icon-danger:hover {
+  opacity: 1;
 }
 
 @media (max-width: 480px) {

@@ -103,7 +103,7 @@ func (s *Server) handleAddTagToFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := s.store.AddTagToFolder(folderId, payload.Name)
+	tag, err := s.store.AddTagToFolder(folderId, payload.Name, "user")
 	if err != nil {
 		log.Printf("Failed to add tag to folder %d: %v", folderId, err)
 		RespondWithError(w, http.StatusInternalServerError, "Failed to add tag to folder")
